@@ -68,3 +68,7 @@ harness = false
 [[bench]]
 name = "display"
 harness = false
+
+[[bench]]
+name = "fade"
+harness = false
