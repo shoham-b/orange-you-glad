@@ -1,0 +1,28 @@
+[Unit]
+Description=Sync photos from Google Drive with rclone
+Documentation=https://github.com/shoham-b/orange-you-glad
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=orange-you-glad
+Group=orange-you-glad
+Environment=RCLONE_CONFIG=/var/lib/orange-you-glad/rclone.conf
+# The remote "gdrive" must already be configured (see docs/DEPLOY.md). Its root_folder_id
+# points at the shared folder, so the remote root is the library root.
+ExecStart=/usr/bin/rclone sync gdrive: /var/lib/orange-you-glad/photos \
+  --ignore-case \
+  --include "*.{jpg,jpeg,png,webp}" \
+  --max-size 25M \
+  --drive-skip-gdocs \
+  --transfers 2 \
+  --log-level INFO
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/orange-you-glad
+TimeoutStartSec=1h

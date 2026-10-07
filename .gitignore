@@ -1,0 +1,23 @@
+/target
+Cargo.toml.orig
+
+# Local configuration and secrets
+*.local.toml
+.env
+.env.*
+
+# Scratch output from dev mode (--output)
+/out*.png
+/scratch/
+*.out.png
+
+# Git worktrees live outside the repo, but guard against accidental ones
+/.worktrees/
+/orange-you-glad.wt/
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
