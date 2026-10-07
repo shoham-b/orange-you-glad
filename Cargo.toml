@@ -60,3 +60,7 @@ panic = "abort"
 [[bench]]
 name = "layout"
 harness = false
+
+[[bench]]
+name = "library"
+harness = false
