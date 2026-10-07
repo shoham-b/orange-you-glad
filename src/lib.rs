@@ -2,5 +2,6 @@
 
 pub mod config;
 pub mod display;
+pub mod fade;
 pub mod layout;
 pub mod library;
