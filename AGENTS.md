@@ -27,13 +27,14 @@ well-known maintained crates.
 
 | Module | Responsibility |
 | --- | --- |
-| `config` | TOML config (`/etc/orange-you-glad.toml`) and CLI-derived overrides |
-| `layout` | Pure geometry: random binary splits into tile rectangles |
+| `config` | TOML config (`/etc/orange-you-glad.toml`), defaults and validation |
+| `layout` | Pure geometry: random splits of a random tile into varied-size rectangles |
 | `library` | Scan the library root, list subjects and image files, pick a subject |
-| `collage` | Decode, scale and place photos into a frame buffer following a layout |
-| `display` | `Display` trait plus framebuffer and PNG-file implementations |
+| `collage` | Decode one photo at a time, cover-crop and scale it into its tile |
+| `display` | `Display` trait plus framebuffer and image-file implementations |
 | `fade` | Cross-fade between two frames, written through a `Display` |
-| `main` | CLI parsing, logging setup, `Slideshow` loop wiring the above together |
+| `slideshow` | `Slideshow`: one cycle of rescan, pick, build, fade (generic over the RNG) |
+| `main` | CLI parsing, logging setup, display selection and the sleep loop |
 
 See `docs/ARCHITECTURE.md` for data flow and the memory budget.
 
@@ -83,15 +84,31 @@ PERMANENT. Never delete entries; only add.
 - Only well-known, maintained dependencies. Justify any new one in the PR description.
 - Log with `tracing`, never `println!` or `eprintln!` (except the CLI's deliberate output).
 - Constants are named with their unit in the name or doc (`FADE_STEP_MS`, "pixels", "bytes").
+- Memory beats speed. The board has 1 GB and a new collage is needed only every few minutes, so
+  prefer lower peak memory over fewer CPU cycles, and back memory claims with a measurement.
+- Every module ships with its tests; performance- or memory-sensitive modules also ship with a
+  benchmark or a heap-budget test in the same PR.
 
 ## Code rules (prunable)
 
 Edit or delete these freely as the code changes.
 
+- Memory is guarded by `tests/memory.rs` (`dhat`, one profiler per process, so keep it the only
+  test in that file). If you change decoding or frame handling, run it and update the budget and
+  the figures in `docs/ARCHITECTURE.md` from the measured value.
+- Benchmarks live in `benches/` with `harness = false`; the lib and bin set `bench = false` so
+  `cargo bench` runs only Criterion. Add a `[[bench]]` table for each new file.
+- `[profile.dev] opt-level = 2` is deliberate: generic `image` code is compiled in this crate and
+  is ~10x slower at opt-level 0, which makes the 12 MP tests crawl.
+- Clippy `assert_is_empty` rejects `assert!(x.is_empty())`; use `assert_eq!(x, vec![])` or compare
+  `.len()` with 0.
+- `Display` implementations receive full `RgbImage` frames; only `display::Geometry::encode_into`
+  knows the framebuffer pixel format.
+
 - rand 0.10 gotcha: `random_range` and similar convenience methods live on `RngExt`, so write
   `use rand::{Rng, RngExt};`. Slice helpers are in `rand::seq::{IndexedRandom, SliceRandom}`.
-- Frames are tightly packed 32-bit pixel buffers sized to the framebuffer's `stride`, not the
-  visible width. Read `stride` and `bits_per_pixel` from sysfs rather than assuming 4 * width.
+- The framebuffer's `stride` can exceed the visible width times bytes per pixel. Read `stride`
+  and `bits_per_pixel` from sysfs rather than assuming 4 * width.
 - Reuse frame buffers between slides; do not allocate a new frame per fade step.
 - Decode one photo at a time and drop it before decoding the next.
 - Skip unreadable or corrupt images with a `tracing::warn!`; one bad file must not stop the show.

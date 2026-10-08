@@ -40,7 +40,7 @@ See `deploy/config.example.toml`.
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `library_root` | none (required) | Directory whose immediate subfolders are subjects |
-| `interval_secs` | `60` | Seconds each collage stays on screen |
+| `interval_secs` | `300` | Seconds each collage stays on screen |
 | `tiles` | `6` | Photos per collage |
 | `gap_px` | `8` | Gap between tiles, in pixels |
 | `fade_ms` | `1500` | Cross-fade duration, in milliseconds |
