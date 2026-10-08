@@ -34,7 +34,7 @@ fn default_tiles() -> usize {
     6
 }
 fn default_gap_px() -> u32 {
-    8
+    0
 }
 fn default_fade_ms() -> u64 {
     1500

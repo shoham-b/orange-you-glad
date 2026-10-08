@@ -30,7 +30,7 @@ fn building_a_collage_of_12mp_photos_stays_within_budget() {
     let tiles = layout::varied(1920, 1080, photos.len(), 8, &mut StdRng::seed_from_u64(1));
 
     let _profiler = dhat::Profiler::builder().testing().build();
-    let canvas = collage::build(1920, 1080, [0, 0, 0], &tiles, &photos);
+    let (canvas, _) = collage::build(1920, 1080, [0, 0, 0], &tiles, &photos);
     let stats = dhat::HeapStats::get();
 
     assert_eq!(canvas.dimensions(), (1920, 1080));

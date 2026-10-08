@@ -58,11 +58,20 @@ impl<R: Rng> Slideshow<R> {
         info!("showing '{}' ({} pictures)", subject.name, subject.images.len());
 
         let (width, height) = display.size();
-        let count = config.tiles.min(subject.images.len());
-        let tiles = layout::varied(width, height, count, config.gap_px, &mut self.rng);
+        let mut count = config.tiles.min(subject.images.len());
         // Offer every picture, not just the first few, so unreadable files can be skipped.
         let candidates = library::shuffled_images(subject, &mut self.rng);
-        let next = collage::build(width, height, config.background, &tiles, &candidates);
+        // If unreadable pictures leave tiles empty, lay out again with fewer tiles so no hole
+        // shows. `filled < tiles.len() <= count`, so `count` shrinks and the loop ends.
+        let next = loop {
+            let tiles = layout::varied(width, height, count, config.gap_px, &mut self.rng);
+            let (canvas, filled) =
+                collage::build(width, height, config.background, &tiles, &candidates);
+            if filled == tiles.len() || filled == 0 {
+                break canvas;
+            }
+            count = filled;
+        };
 
         let fade = Duration::from_millis(config.fade_ms);
         fade::transition(display, &self.current, &next, fade, &mut self.scratch)?;
@@ -135,6 +144,20 @@ mod tests {
             seen.push(show.current_subject().unwrap().to_owned());
         }
         assert!(seen.windows(2).all(|pair| pair[0] != pair[1]), "repeated subject in {seen:?}");
+    }
+
+    #[test]
+    fn unreadable_picture_means_fewer_tiles_not_a_hole() {
+        let dir = tempfile::tempdir().unwrap();
+        photo(dir.path(), "red", [250, 0, 0]);
+        std::fs::write(dir.path().join("red").join("bad.png"), b"not an image").unwrap();
+        let mut display = Recorder { size: (16, 16), frames: Vec::new() };
+        let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
+
+        show.show_next(&config(dir.path()), &mut display).unwrap();
+
+        let frame = display.frames.last().unwrap();
+        assert!(frame.pixels().all(|p| p == &Rgb([250, 0, 0])), "background showed through");
     }
 
     #[test]
