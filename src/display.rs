@@ -3,6 +3,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use image::RgbImage;
@@ -13,6 +14,12 @@ pub trait Display {
     fn size(&self) -> (u32, u32);
     /// Replaces the screen contents. `frame` must match `size()`.
     fn present(&mut self, frame: &RgbImage) -> Result<()>;
+    /// Waits for `duration` while the current frame stays on screen. A windowed display keeps
+    /// handling events here so it stays responsive.
+    fn idle(&mut self, duration: Duration) -> Result<()> {
+        std::thread::sleep(duration);
+        Ok(())
+    }
 }
 
 #[derive(Debug, Error)]
@@ -21,6 +28,8 @@ pub enum DisplayError {
     UnsupportedDepth(u32),
     #[error("frame is {got:?} but the display is {expected:?}")]
     SizeMismatch { expected: (u32, u32), got: (u32, u32) },
+    #[error("the preview window was closed")]
+    WindowClosed,
     #[error("cannot parse {what}: {value:?}")]
     BadSysfsValue { what: &'static str, value: String },
 }
@@ -156,6 +165,81 @@ impl Display for FileDisplay {
 
     fn present(&mut self, frame: &RgbImage) -> Result<()> {
         frame.save(&self.path).with_context(|| format!("cannot save {}", self.path.display()))
+    }
+}
+
+#[cfg(feature = "window")]
+pub use window::WindowDisplay;
+
+#[cfg(feature = "window")]
+mod window {
+    use std::time::{Duration, Instant};
+
+    use anyhow::{Context, Result};
+    use image::RgbImage;
+    use minifb::{Key, Window, WindowOptions};
+
+    use super::{Display, DisplayError};
+
+    /// Shows frames in a desktop window so the slideshow can be previewed without a TV.
+    /// Closing the window or pressing Esc ends the show with `DisplayError::WindowClosed`.
+    pub struct WindowDisplay {
+        window: Window,
+        size: (u32, u32),
+        /// 0RGB pixels of the last frame, reused so a fade does not allocate.
+        buffer: Vec<u32>,
+    }
+
+    impl WindowDisplay {
+        pub fn open(size: (u32, u32)) -> Result<Self> {
+            let (w, h) = (size.0 as usize, size.1 as usize);
+            let options = WindowOptions {
+                resize: true,
+                scale_mode: minifb::ScaleMode::AspectRatioStretch,
+                ..WindowOptions::default()
+            };
+            let mut window = Window::new("Orange You Glad", w, h, options)
+                .context("cannot open the preview window")?;
+            window.set_target_fps(60);
+            Ok(Self { window, size, buffer: vec![0; w * h] })
+        }
+
+        fn refresh(&mut self) -> Result<()> {
+            if !self.window.is_open() || self.window.is_key_down(Key::Escape) {
+                return Err(DisplayError::WindowClosed.into());
+            }
+            let (w, h) = (self.size.0 as usize, self.size.1 as usize);
+            self.window.update_with_buffer(&self.buffer, w, h).context("window update failed")
+        }
+    }
+
+    impl Display for WindowDisplay {
+        fn size(&self) -> (u32, u32) {
+            self.size
+        }
+
+        fn present(&mut self, frame: &RgbImage) -> Result<()> {
+            if frame.dimensions() != self.size {
+                return Err(DisplayError::SizeMismatch {
+                    expected: self.size,
+                    got: frame.dimensions(),
+                }
+                .into());
+            }
+            for (dst, src) in self.buffer.iter_mut().zip(frame.pixels()) {
+                let [r, g, b] = src.0;
+                *dst = u32::from(r) << 16 | u32::from(g) << 8 | u32::from(b);
+            }
+            self.refresh()
+        }
+
+        fn idle(&mut self, duration: Duration) -> Result<()> {
+            let until = Instant::now() + duration;
+            while Instant::now() < until {
+                self.refresh()?;
+            }
+            Ok(())
+        }
     }
 }
 

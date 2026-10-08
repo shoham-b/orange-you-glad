@@ -36,6 +36,10 @@ render: sync config
 run: sync config
     cargo run --release -- --config {{config}} --output out.png
 
+# Sync, then keep running in a desktop window (Esc or close to quit).
+window: sync config
+    cargo run --release --features window -- --config {{config}} --window
+
 # Sync the development Drive copy, then run the ignored tests in tests/drive_integration.rs.
 integration: sync
     cargo test --test drive_integration -- --ignored
