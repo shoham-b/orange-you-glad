@@ -183,6 +183,25 @@ re-reads it every 10 seconds until it is fixed. It retries at the same pace when
 built (for example `subjects.json` is missing or invalid). Each problem is logged once in the
 journal, and again when it recovers.
 
+## Local development against Drive
+
+The Drive folder "Orange You Glad" has two copies of the same layout, `production` (the real show;
+point the Pi's `root_folder_id` at it) and `development` (fixtures for integration tests, with a
+short interval). Each holds `Incoming/`, `Processed/`, `Errored/` and `Config/`. On a dev machine,
+after the one-time `rclone config create gdrive drive scope=drive.readonly`:
+
+```sh
+just render                      # sync development, write config.development.local.toml, render out.png
+just env=production run          # keep running against production
+just check                       # fmt, clippy, tests
+just integration                 # sync the development copy, run the ignored Drive tests
+```
+
+The `development` copy holds eight single-colour pictures (subjects `warm`, `cool`, `neutral`,
+`sample`) and short-interval settings. `tests/drive_integration.rs` checks against it that
+subjects resolve, settings apply, and every collage is gap-free and made only of those colours;
+its tests are `#[ignore]`d so plain `cargo test` and CI do not need Drive.
+
 ## Troubleshooting
 
 | Symptom | Things to check |
@@ -197,11 +216,3 @@ journal, and again when it recovers.
 | Sync copies nothing | Wrong `root_folder_id`, or the folder is not shared with the authorizing account |
 | Out-of-memory kills | Check `journalctl -k`; reduce `tiles`; lower `--max-size`; confirm swap or zram |
 | Blinking cursor visible | `vt.global_cursor_default=0` missing from the kernel arguments |
-
-## Previewing on a PC
-
-`scripts/preview.ps1` mimics the board on Windows: it syncs the Drive folder with the same rclone
-flags as the sync unit into `.preview/photos`, runs the app with `--output .preview/screen.png`,
-and opens `scripts/viewer.html` in an Edge app window that shows the frames live, fades included.
-Needs rclone with a `gdrive` remote (step 6). Use `-SkipSync` to reuse downloaded photos and
-`-IntervalSecs` to change the slide interval. It does not exercise the framebuffer code.

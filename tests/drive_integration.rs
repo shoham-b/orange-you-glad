@@ -1,0 +1,106 @@
+//! Runs the real library, settings and collage code against the synced Drive `development` copy:
+//! eight single-colour pictures (so a wrong pixel is easy to spot) in subjects `warm`, `cool`,
+//! `neutral` and `sample`. Ignored by default because it needs the sync; run `just integration`.
+
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+
+use anyhow::Result;
+use image::RgbImage;
+use orange_you_glad::config::Config;
+use orange_you_glad::display::Display;
+use orange_you_glad::library;
+use orange_you_glad::slideshow::Slideshow;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
+
+const NEEDS_SYNC: &str = "needs the synced Drive development copy: run `just integration`";
+/// Allowed per-channel difference between a fixture colour and a rendered pixel (resampling).
+const COLOUR_TOLERANCE: u8 = 3;
+
+struct Recorder {
+    size: (u32, u32),
+    last: Option<RgbImage>,
+}
+
+impl Display for Recorder {
+    fn size(&self) -> (u32, u32) {
+        self.size
+    }
+    fn present(&mut self, frame: &RgbImage) -> Result<()> {
+        self.last = Some(frame.clone());
+        Ok(())
+    }
+}
+
+fn library_root() -> PathBuf {
+    PathBuf::from(std::env::var("OYG_LIBRARY").expect("OYG_LIBRARY is not set"))
+}
+
+fn config(tiles: usize) -> Config {
+    toml::from_str(&format!(
+        "library_root = \"{}\"\ntiles = {tiles}\ngap_px = 0\nfade_ms = 0\nbackground = [0, 0, 0]",
+        library_root().display()
+    ))
+    .unwrap()
+}
+
+/// The one colour of a fixture picture; fails if the picture is not a single colour.
+fn solid_colour(path: &std::path::Path) -> [u8; 3] {
+    let img = image::open(path).unwrap().to_rgb8();
+    let first = *img.get_pixel(0, 0);
+    assert!(img.pixels().all(|p| *p == first), "{} is not a single colour", path.display());
+    first.0
+}
+
+fn close(a: [u8; 3], b: [u8; 3]) -> bool {
+    a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= COLOUR_TOLERANCE)
+}
+
+#[test]
+#[ignore = "needs the synced Drive development copy: run `just integration`"]
+fn drive_fixtures_resolve_to_single_colour_pictures() {
+    let subjects = library::scan(&library_root()).expect(NEEDS_SYNC);
+    let sizes: BTreeMap<_, _> =
+        subjects.iter().map(|s| (s.name.as_str(), s.images.len())).collect();
+    assert_eq!(sizes, BTreeMap::from([("cool", 3), ("neutral", 2), ("sample", 1), ("warm", 3)]));
+
+    let mut colours: Vec<[u8; 3]> =
+        subjects.iter().flat_map(|s| &s.images).map(|p| solid_colour(p)).collect();
+    colours.sort_unstable();
+    colours.dedup();
+    assert!(colours.len() >= 8, "expected a variety of colours, got {colours:?}");
+}
+
+#[test]
+#[ignore = "needs the synced Drive development copy: run `just integration`"]
+fn drive_settings_are_applied_over_the_local_config() {
+    let local = config(6);
+    let applied = local.drive_overrides().expect("Config/settings.toml should be valid");
+    assert_eq!((applied.interval_secs, applied.tiles, applied.fade_ms), (5, 4, 200));
+    assert_eq!(applied.library_root, local.library_root);
+}
+
+#[test]
+#[ignore = "needs the synced Drive development copy: run `just integration`"]
+fn every_cycle_draws_a_gap_free_collage_of_fixture_colours() {
+    let subjects = library::scan(&library_root()).expect(NEEDS_SYNC);
+    let palette: Vec<[u8; 3]> =
+        subjects.iter().flat_map(|s| &s.images).map(|p| solid_colour(p)).collect();
+    let config = config(4);
+
+    let mut display = Recorder { size: (640, 360), last: None };
+    let mut show = Slideshow::with_rng((640, 360), StdRng::seed_from_u64(7));
+    let mut seen = Vec::new();
+    for cycle in 0..12 {
+        show.show_next(&config, &mut display).unwrap();
+        let frame = display.last.as_ref().expect("a frame was presented");
+        let stray = frame.pixels().find(|p| !palette.iter().any(|c| close(p.0, *c)));
+        assert_eq!(stray, None, "cycle {cycle}: pixel outside the fixture palette (gap?)");
+        seen.push(show.current_subject().unwrap().to_owned());
+    }
+    assert!(seen.windows(2).all(|w| w[0] != w[1]), "subject repeated back to back: {seen:?}");
+    seen.sort();
+    seen.dedup();
+    assert!(seen.len() >= 3, "expected several subjects over 12 cycles, got {seen:?}");
+}
