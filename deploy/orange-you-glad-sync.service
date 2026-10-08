@@ -1,8 +1,8 @@
 [Unit]
 Description=Sync photos from Google Drive with rclone
 Documentation=https://github.com/shoham-b/orange-you-glad
-Wants=network-online.target
-After=network-online.target
+Wants=network-online.target time-sync.target
+After=network-online.target time-sync.target
 
 [Service]
 Type=oneshot
@@ -16,6 +16,7 @@ ExecStart=/usr/bin/rclone sync gdrive: /var/lib/orange-you-glad/photos \
   --include "*.{jpg,jpeg,png,webp}" \
   --include "orange-you-glad.toml" \
   --max-size 25M \
+  --max-delete 50 \
   --drive-skip-gdocs \
   --transfers 2 \
   --log-level INFO
@@ -27,3 +28,5 @@ ProtectHome=yes
 PrivateTmp=yes
 ReadWritePaths=/var/lib/orange-you-glad
 TimeoutStartSec=1h
+# rclone buffers directory listings; keep it from starving the slideshow on the 1 GB board.
+MemoryMax=300M
