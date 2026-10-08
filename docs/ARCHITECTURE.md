@@ -12,8 +12,8 @@ flowchart LR
     LY --> C[collage: decode one photo at a time, scale, place]
     C --> F[fade: blend previous and next frame]
     F --> D{{Display trait}}
-    D --> FB[/dev/fb0]
-    D --> PNG[PNG file in dev mode]
+    D --> FB["/dev/fb0"]
+    D --> PNG["PNG file in dev mode"]
 ```
 
 Per slide: pick a subject, choose `tiles` images from it, compute a layout for the frame size,
