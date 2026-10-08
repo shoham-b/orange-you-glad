@@ -170,6 +170,19 @@ next sync the slideshow applies it at the start of the next cycle, no restart ne
 cannot be changed this way. A file with a typo or an invalid value is ignored with a warning in
 the journal.
 
+## Local development against Drive
+
+The Drive folder "Orange You Glad" has two copies of the same layout: `production` (the real
+show; point the Pi's `root_folder_id` at it) and `development` (fixtures for integration tests,
+with short intervals). On a dev machine, after the one-time `rclone config create gdrive drive
+scope=drive.readonly`:
+
+```sh
+just render                      # sync development, write config.development.local.toml, render out.png
+just env=production run          # keep running against production
+just check                       # fmt, clippy, tests
+```
+
 ## Troubleshooting
 
 | Symptom | Things to check |

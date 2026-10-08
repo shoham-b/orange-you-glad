@@ -46,7 +46,12 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 cargo bench                      # criterion benchmarks in benches/
 cargo run -- --config config.local.toml --output out.png --size 1920x1080 --once
+just check                       # fmt --check, clippy, tests
+just render                      # sync Drive (development copy) with rclone, render out.png
+just env=production run          # same, against the production Drive copy
 ```
+
+The `justfile` needs `just` and rclone (`rclone config create gdrive drive scope=drive.readonly`).
 
 `*.local.toml` and scratch images are git-ignored. On Windows, long paths break some build
 scripts; use a short target dir, for example `CARGO_TARGET_DIR=/c/t/oyg` (bash) or
