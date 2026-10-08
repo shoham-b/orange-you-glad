@@ -26,3 +26,4 @@ Thumbs.db
 # Drive service-account keys
 *.sa.json
 /secrets/
+.preview/
