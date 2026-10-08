@@ -4,6 +4,8 @@ pub mod collage;
 pub mod config;
 pub mod display;
 pub mod fade;
+pub mod family;
+pub mod hebrew;
 pub mod layout;
 pub mod library;
 pub mod pacing;
