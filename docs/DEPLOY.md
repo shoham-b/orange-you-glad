@@ -125,9 +125,10 @@ Restrict the config file, which also holds the token that rclone refreshes:
 sudo chmod 600 /var/lib/orange-you-glad/rclone.conf
 ```
 
-Alternative if you do not know the folder ID: skip `root_folder_id` and add
-`--drive-shared-with-me` to the sync command; the remote root then lists everything shared with
-the account, so each shared folder becomes a subject.
+Set `root_folder_id` to the folder that directly contains `Incoming/`, `Processed/`, `Errored/` and
+`Config/`. Pictures are `Processed/<uuid>.<ext>`; `Config/subjects.json` maps subject names to
+uuid lists, for example `{"dog": ["<uuid>", "<uuid>"], "ski": ["<uuid>"]}`. A uuid may appear
+under several subjects.
 
 Test a dry run:
 
@@ -180,7 +181,7 @@ the journal.
 | Screen is blank or the console reappears | Another process owns the display; stop any `getty` or desktop on tty1; verify the kernel arguments from step 2 |
 | Screen blanks after a few minutes | `consoleblank=0` missing from `/proc/cmdline` |
 | Garbled or shifted image | Resolution or stride mismatch; recheck `virtual_size`, `stride`, `bits_per_pixel` |
-| No photos shown | `library_root` wrong, or no subfolders containing `.jpg`, `.jpeg`, `.png` or `.webp` files; run with `RUST_LOG=debug` |
+| No photos shown | `library_root` wrong, `Config/subjects.json` missing or invalid, or its uuids have no matching file in `Processed/` yet (unsynced uuids are logged as warnings); run with `RUST_LOG=debug` |
 | Sync fails with auth errors | Wrong system clock (`timedatectl`); expired token (an OAuth app in "Testing" status expires after 7 days: run `rclone config reconnect gdrive:` or switch to a service account); wrong scope |
 | Sync aborts with a max-delete error | Drive listed far fewer files than expected; check `root_folder_id` and that the folder is still shared, then raise `--max-delete` if the removal was intended |
 | Sync copies nothing | Wrong `root_folder_id`, or the folder is not shared with the authorizing account |

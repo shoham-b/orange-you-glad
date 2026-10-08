@@ -14,10 +14,10 @@ new command), update this file or `docs/` in the same PR, immediately.
 ## Purpose and constraints
 
 Orange You Glad is a photo-collage slideshow for a TV. It runs on an Orange Pi Zero 2W
-(Allwinner H618, 4 cores, 1 GB RAM, Debian/Armbian aarch64) with HDMI output. It scans a library
-root whose immediate subfolders are "subjects" (synced from a shared Google Drive folder with
-rclone), picks a subject, builds a collage with varied tile sizes (random binary splits),
-cross-fades from the previous collage, and writes frames straight to `/dev/fb0`. There is no X
+(Allwinner H618, 4 cores, 1 GB RAM, Debian/Armbian aarch64) with HDMI output. It reads a library
+root synced from a shared Google Drive folder with rclone: `Processed/<uuid>.<ext>` pictures and
+`Config/subjects.json`, which maps each "subject" to a list of uuids. It picks a subject, builds a collage with varied tile sizes (random binary
+splits), cross-fades from the previous collage, and writes frames straight to `/dev/fb0`. There is no X
 server. Target resolution is 1080p.
 
 Hard constraints: 1 GB RAM total (decode one image at a time, reuse buffers), no GUI stack, only
@@ -29,7 +29,7 @@ well-known maintained crates.
 | --- | --- |
 | `config` | TOML config (`/etc/orange-you-glad.toml`), defaults and validation |
 | `layout` | Pure geometry: random splits of a random tile into varied-size rectangles |
-| `library` | Scan the library root, list subjects and image files, pick a subject |
+| `library` | Resolve subjects (uuid lists) to image files, pick a subject |
 | `collage` | Decode one photo at a time, cover-crop and scale it into its tile |
 | `display` | `Display` trait plus framebuffer and image-file implementations |
 | `fade` | Cross-fade between two frames, written through a `Display` |
