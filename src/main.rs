@@ -1,13 +1,14 @@
 use std::path::PathBuf;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use clap::Parser;
-use tracing::error;
+use tracing::{info, warn};
 
 use orange_you_glad::config::Config;
 use orange_you_glad::display::{Display, FileDisplay, Framebuffer};
+use orange_you_glad::pacing::{RETRY_SECS, next_sleep};
 use orange_you_glad::slideshow::Slideshow;
 
 #[derive(Parser)]
@@ -51,18 +52,57 @@ fn main() -> Result<()> {
     };
 
     let mut slideshow = Slideshow::new(display.size());
+    let mut current = config.clone();
+    let mut settings_error = None;
+    let mut cycle_error = None;
     loop {
-        // Re-read each cycle so settings edited in Drive apply after the next sync.
-        let current = config.with_drive_overrides();
-        // A failed cycle (e.g. nothing synced yet) is logged and retried next time.
-        if let Err(err) = slideshow.show_next(&current, display.as_mut()) {
-            error!("{err:#}");
-        }
+        refresh(&config, &mut current, &mut settings_error);
+        let shown = slideshow.show_next(&current, display.as_mut());
+        let failed = shown.is_err();
+        log_change(&mut cycle_error, shown.err().map(|e| format!("{e:#}")), "collage");
         if args.once {
             return Ok(());
         }
-        thread::sleep(Duration::from_secs(current.interval_secs));
+        if failed {
+            // Nothing is on screen yet (e.g. nothing synced); retry soon instead of waiting.
+            thread::sleep(Duration::from_secs(RETRY_SECS));
+            continue;
+        }
+        let shown_at = Instant::now();
+        while let Some(nap) = next_sleep(
+            shown_at.elapsed(),
+            Duration::from_secs(current.interval_secs),
+            settings_error.is_none(),
+        ) {
+            thread::sleep(nap);
+            refresh(&config, &mut current, &mut settings_error);
+        }
     }
+}
+
+/// Re-reads the Drive settings. On failure the last good settings stay in force.
+fn refresh(base: &Config, current: &mut Config, last_error: &mut Option<String>) {
+    match base.drive_overrides() {
+        Ok(fresh) => {
+            *current = fresh;
+            log_change(last_error, None, "settings");
+        }
+        Err(err) => log_change(last_error, Some(format!("{err:#}")), "settings"),
+    }
+}
+
+/// Logs only when the problem appears, changes or goes away, so fast retries do not flood the
+/// journal.
+fn log_change(last: &mut Option<String>, now: Option<String>, what: &str) {
+    if *last == now {
+        return;
+    }
+    if let Some(message) = &now {
+        warn!("{what}: {message}");
+    } else {
+        info!("{what} recovered");
+    }
+    *last = now;
 }
 
 #[cfg(test)]

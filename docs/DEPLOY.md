@@ -166,11 +166,15 @@ at a time while reading `journalctl -u orange-you-glad`.
 ## Settings from Drive
 
 Put a file named `settings.toml` in the `Config/` folder of the shared Drive folder. After the
-next sync the slideshow applies it at the start of the next cycle, no restart needed. It may set
-`interval_secs`, `tiles`, `gap_px`, `fade_ms` and `background` (same meaning as in
-`/etc/orange-you-glad.toml`); unset keys keep the local values. `library_root` and `framebuffer`
-cannot be changed this way. A file with a typo or an invalid value is ignored with a warning in
-the journal.
+next sync the slideshow picks it up, no restart needed. It may set `interval_secs`, `tiles`,
+`gap_px`, `fade_ms` and `background` (same meaning as in `/etc/orange-you-glad.toml`); unset keys
+keep the local values. `library_root` and `framebuffer` cannot be changed this way.
+
+The board re-reads the file every 60 seconds, so a new `interval_secs` applies within a minute.
+While the file has a typo or an invalid value, the last good settings stay in force and the board
+re-reads it every 10 seconds until it is fixed. It retries at the same pace when no collage can be
+built (for example `subjects.json` is missing or invalid). Each problem is logged once in the
+journal, and again when it recovers.
 
 ## Troubleshooting
 

@@ -6,5 +6,6 @@ pub mod display;
 pub mod fade;
 pub mod layout;
 pub mod library;
+pub mod pacing;
 
 pub mod slideshow;

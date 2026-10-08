@@ -59,27 +59,19 @@ struct Overrides {
 }
 
 impl Config {
-    /// This config with the Drive file's settings applied on top.
+    /// This config with the Drive settings file applied on top.
     ///
-    /// A missing file means no overrides. A malformed or invalid one is logged and ignored, so a
-    /// typo made in Drive keeps the show running with the local settings.
-    #[must_use]
-    pub fn with_drive_overrides(&self) -> Config {
+    /// A missing file means no overrides.
+    ///
+    /// # Errors
+    /// Fails when the file cannot be read or holds a typo or invalid value. The caller keeps the
+    /// local settings meanwhile, so a mistake made in Drive never stops the show.
+    pub fn drive_overrides(&self) -> Result<Config> {
         let path = self.library_root.join(SETTINGS_FILE);
-        let text = match std::fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return self.clone(),
-            Err(err) => {
-                tracing::warn!("cannot read {}: {err}", path.display());
-                return self.clone();
-            }
-        };
-        match self.merged(&text) {
-            Ok(config) => config,
-            Err(err) => {
-                tracing::warn!("ignoring {}: {err:#}", path.display());
-                self.clone()
-            }
+        match std::fs::read_to_string(&path) {
+            Ok(text) => self.merged(&text).with_context(|| format!("ignoring {}", path.display())),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(self.clone()),
+            Err(err) => Err(err).with_context(|| format!("cannot read {}", path.display())),
         }
     }
 
@@ -136,6 +128,10 @@ mod tests {
         assert!(toml::from_str::<Config>("library_root = \"/x\"\ntypo = 1").is_err());
     }
 
+    fn applied(c: &Config) -> Config {
+        c.drive_overrides().unwrap_or_else(|_| c.clone())
+    }
+
     fn base(root: &Path) -> Config {
         toml::from_str(&format!("library_root = {root:?}\ntiles = 4")).unwrap()
     }
@@ -150,14 +146,14 @@ mod tests {
     fn drive_file_overrides_only_the_keys_it_sets() {
         let dir = tempfile::tempdir().unwrap();
         write_settings(dir.path(), "interval_secs = 60\ngap_px = 0");
-        let c = base(dir.path()).with_drive_overrides();
+        let c = applied(&base(dir.path()));
         assert_eq!((c.interval_secs, c.gap_px, c.tiles), (60, 0, 4));
     }
 
     #[test]
     fn missing_drive_file_keeps_the_base_config() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(base(dir.path()).with_drive_overrides().tiles, 4);
+        assert_eq!(applied(&base(dir.path())).tiles, 4);
     }
 
     #[test]
@@ -165,11 +161,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         for bad in ["tiles = 0", "tiles = ", "framebuffer = \"/dev/null\"", "typo = 1"] {
             write_settings(dir.path(), bad);
-            assert_eq!(base(dir.path()).with_drive_overrides().tiles, 4, "{bad}");
-            assert_eq!(
-                base(dir.path()).with_drive_overrides().framebuffer,
-                PathBuf::from("/dev/fb0")
-            );
+            assert_eq!(applied(&base(dir.path())).tiles, 4, "{bad}");
+            assert!(base(dir.path()).drive_overrides().is_err(), "{bad}");
+            assert_eq!(applied(&base(dir.path())).framebuffer, PathBuf::from("/dev/fb0"));
         }
     }
 

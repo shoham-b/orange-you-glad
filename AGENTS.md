@@ -34,6 +34,7 @@ well-known maintained crates.
 | `display` | `Display` trait plus framebuffer and image-file implementations |
 | `fade` | Cross-fade between two frames, written through a `Display` |
 | `slideshow` | `Slideshow`: one cycle of rescan, pick, build, fade (generic over the RNG) |
+| `pacing` | Pure timing: how long to sleep between settings probes (60 s, or 10 s after a failure) |
 | `main` | CLI parsing, logging setup, display selection and the sleep loop |
 
 See `docs/ARCHITECTURE.md` for data flow and the memory budget.
