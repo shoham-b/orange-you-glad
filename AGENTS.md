@@ -57,7 +57,7 @@ just render                      # sync Drive (development copy) with rclone, re
 just env=production run          # same, against the production Drive copy
 ```
 
-The `justfile` needs `just` and rclone (`rclone config create gdrive drive scope=drive.readonly`).
+The `justfile` needs `just` and rclone (copy `.env.example` to the git-ignored `.env`, point it at the service-account key, run `just drive-auth`).
 
 `*.local.toml` and scratch images are git-ignored. On Windows, long paths break some build
 scripts; use a short target dir, for example `CARGO_TARGET_DIR=/c/t/oyg` (bash) or

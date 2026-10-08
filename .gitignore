@@ -5,6 +5,7 @@ Cargo.toml.orig
 *.local.toml
 .env
 .env.*
+!.env.example
 
 # Scratch output from dev mode (--output)
 /out*.png
