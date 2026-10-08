@@ -130,6 +130,12 @@ Set `root_folder_id` to the folder that directly contains `Incoming/`, `Processe
 uuid lists, for example `{"dog": ["<uuid>", "<uuid>"], "ski": ["<uuid>"]}`. A uuid may appear
 under several subjects.
 
+Optionally, `Config/shapes.json` records each picture's size as it is meant to be shown (rotation
+applied), for example `{"<uuid>": {"width": 4000, "height": 3000}}`. The slideshow uses it to fit
+the layout to the pictures without opening them. Pictures not listed, or a missing or invalid
+file, fall back to reading the size from the image file, so the file is a speed-up, not a
+requirement.
+
 Test a dry run:
 
 ```sh

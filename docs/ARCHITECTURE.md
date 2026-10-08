@@ -16,7 +16,7 @@ flowchart LR
     D --> PNG["PNG file in dev mode"]
 ```
 
-Per slide: pick a subject, choose `tiles` images from it, read their shapes from the file headers, try several random layouts
+Per slide: pick a subject, choose `tiles` images from it, take their shapes from `Config/shapes.json` (or the file header), try several random layouts
 for the frame size and keep the one whose tiles best match those shapes,
 render the collage into the "next" frame, cross-fade from "previous" to "next" through the
 `Display`, then hold for `interval_secs`. "Next" becomes "previous" and the cycle repeats.

@@ -1,6 +1,7 @@
 //! One slideshow cycle: pick a subject, build a collage, fade it in.
 
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -60,7 +61,9 @@ impl<R: Rng> Slideshow<R> {
 
         let (width, height) = display.size();
         let count = config.tiles.min(subject.images.len());
-        let (mut aspects, all) = probe(library::shuffled_images(subject, &mut self.rng), count);
+        let shapes = library::load_shapes(&config.library_root);
+        let (mut aspects, all) =
+            probe(library::shuffled_images(subject, &mut self.rng), count, &shapes);
         // If unreadable pictures leave tiles empty, lay out again with fewer tiles so no hole
         // shows. `filled < tiles.len() <= aspects.len()`, so `aspects` shrinks and the loop ends.
         let next = loop {
@@ -92,10 +95,14 @@ impl<R: Rng> Slideshow<R> {
 /// Candidate layouts tried per collage; each is cheap geometry, so this costs microseconds.
 const FIT_ATTEMPTS: usize = 24;
 
-/// Reads the shape of the first `count` pictures that open, from their headers. Returns their
-/// aspect ratios and every picture to offer the collage: those first, then the untouched rest as
-/// spares in case one fails to decode later. Pictures that cannot be opened are dropped.
-fn probe(pool: Vec<PathBuf>, count: usize) -> (Vec<f64>, Vec<PathBuf>) {
+/// Finds the shape of the first `count` usable pictures: from `shapes` (see
+/// `library::load_shapes`) when listed, otherwise from the file header. Returns their aspect ratios and every picture to offer the collage: those first, then the untouched rest as
+/// spares in case one fails to decode later. Unlisted pictures that cannot be opened are dropped.
+fn probe(
+    pool: Vec<PathBuf>,
+    count: usize,
+    shapes: &HashMap<String, f64>,
+) -> (Vec<f64>, Vec<PathBuf>) {
     let mut aspects = Vec::with_capacity(count);
     let mut all = Vec::with_capacity(pool.len());
     let mut spares = Vec::new();
@@ -103,7 +110,7 @@ fn probe(pool: Vec<PathBuf>, count: usize) -> (Vec<f64>, Vec<PathBuf>) {
         if aspects.len() == count {
             spares.push(path);
         } else {
-            match collage::probe_aspect(&path) {
+            match recorded(&path, shapes).map_or_else(|| collage::probe_aspect(&path), Ok) {
                 Ok(aspect) => {
                     aspects.push(aspect);
                     all.push(path);
@@ -114,6 +121,11 @@ fn probe(pool: Vec<PathBuf>, count: usize) -> (Vec<f64>, Vec<PathBuf>) {
     }
     all.extend(spares);
     (aspects, all)
+}
+
+fn recorded(path: &Path, shapes: &HashMap<String, f64>) -> Option<f64> {
+    let stem = path.file_stem()?.to_str()?;
+    shapes.get(&stem.to_ascii_lowercase()).copied()
 }
 
 /// `all` reordered so index `i` is the picture for tile `i`, followed by the pictures that got no
@@ -221,11 +233,22 @@ mod tests {
         }
         pool.insert(1, dir.path().join("missing.png"));
 
-        let (aspects, all) = probe(pool, 2);
+        let (aspects, all) = probe(pool, 2, &HashMap::new());
 
         assert_eq!(aspects, [2.0, 0.5]);
         assert_eq!(all.len(), 3);
         assert!(all[2].ends_with("spare.png"));
+    }
+
+    #[test]
+    fn recorded_shapes_win_over_the_file_and_need_no_open() {
+        let shapes = HashMap::from([("one".to_owned(), 2.0), ("two".to_owned(), 0.5)]);
+        let pool = ["/none/ONE.jpg", "/none/two.jpg", "/none/spare.jpg"].map(PathBuf::from);
+
+        let (aspects, all) = probe(pool.to_vec(), 2, &shapes);
+
+        assert_eq!(aspects, [2.0, 0.5]);
+        assert_eq!(all, pool);
     }
 
     #[test]
