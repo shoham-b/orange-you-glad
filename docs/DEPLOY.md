@@ -204,11 +204,3 @@ just check                       # fmt, clippy, tests
 | Sync copies nothing | Wrong `root_folder_id`, or the folder is not shared with the authorizing account |
 | Out-of-memory kills | Check `journalctl -k`; reduce `tiles`; lower `--max-size`; confirm swap or zram |
 | Blinking cursor visible | `vt.global_cursor_default=0` missing from the kernel arguments |
-
-## Previewing on a PC
-
-`scripts/preview.ps1` mimics the board on Windows: it syncs the Drive folder with the same rclone
-flags as the sync unit into `.preview/photos`, runs the app with `--output .preview/screen.png`,
-and opens `scripts/viewer.html` in an Edge app window that shows the frames live, fades included.
-Needs rclone with a `gdrive` remote (step 6). Use `-SkipSync` to reuse downloaded photos and
-`-IntervalSecs` to change the slide interval. It does not exercise the framebuffer code.
