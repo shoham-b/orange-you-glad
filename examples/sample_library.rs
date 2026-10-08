@@ -8,7 +8,14 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use image::{Rgb, RgbImage};
 
-const SUBJECTS: [&str; 5] = ["beach", "forest", "city", "snow", "party"];
+/// A subject and the symbol drawn in the middle of each of its pictures.
+const SUBJECTS: [(&str, Symbol); 5] = [
+    ("beach", Symbol::Circle),
+    ("forest", Symbol::Triangle),
+    ("city", Symbol::Square),
+    ("snow", Symbol::Diamond),
+    ("party", Symbol::Plus),
+];
 const PICTURES_PER_SUBJECT: u32 = 12;
 /// Width and height ratios cycled through, so tiles get portrait, landscape and square photos.
 const SHAPES: [(u32, u32); 6] = [(4, 3), (3, 4), (16, 9), (1, 1), (3, 2), (2, 3)];
@@ -22,7 +29,7 @@ fn main() -> Result<()> {
     fs::create_dir_all(root.join("Config"))?;
 
     let mut subjects = String::from("{\n");
-    for (s, name) in SUBJECTS.iter().enumerate() {
+    for (s, (name, symbol)) in SUBJECTS.iter().enumerate() {
         let mut ids = Vec::new();
         for n in 0..PICTURES_PER_SUBJECT {
             let index = s as u32 * PICTURES_PER_SUBJECT + n;
@@ -33,7 +40,7 @@ fn main() -> Result<()> {
             } else {
                 (LONG_EDGE_PX * w / h, LONG_EDGE_PX)
             };
-            picture(w, h, index).save(processed.join(format!("{id}.png")))?;
+            picture(w, h, index, *symbol).save(processed.join(format!("{id}.png")))?;
             ids.push(format!("\"{id}\""));
         }
         let comma = if s + 1 < SUBJECTS.len() { "," } else { "" };
@@ -49,17 +56,41 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// A gradient with diagonal stripes and a centre ring, so cropping and scaling are visible.
-fn picture(w: u32, h: u32, index: u32) -> RgbImage {
+#[derive(Clone, Copy)]
+enum Symbol {
+    Circle,
+    Triangle,
+    Square,
+    Diamond,
+    Plus,
+}
+
+impl Symbol {
+    /// Whether `(dx, dy)`, in units of the symbol's half-size from its centre, is inside it.
+    fn contains(self, dx: f32, dy: f32) -> bool {
+        match self {
+            Self::Circle => dx.hypot(dy) <= 1.0,
+            Self::Square => dx.abs() <= 0.85 && dy.abs() <= 0.85,
+            Self::Diamond => dx.abs() + dy.abs() <= 1.15,
+            Self::Triangle => (-1.0..=0.8).contains(&dy) && dx.abs() <= (dy + 1.0) * 0.55,
+            Self::Plus => {
+                (dx.abs() <= 0.3 && dy.abs() <= 1.0) || (dy.abs() <= 0.3 && dx.abs() <= 1.0)
+            }
+        }
+    }
+}
+
+/// A gradient with diagonal stripes and the subject's white symbol in the centre, so cropping,
+/// scaling and the subject are all visible.
+fn picture(w: u32, h: u32, index: u32, symbol: Symbol) -> RgbImage {
     let hue = (index * 47 % 360) as f32;
     let (cx, cy) = (w as f32 / 2.0, h as f32 / 2.0);
-    let radius = w.min(h) as f32 / 3.0;
+    let half = w.min(h) as f32 / 3.0;
     RgbImage::from_fn(w, h, |x, y| {
         let shade = 0.35 + 0.65 * (y as f32 / h as f32);
-        let dist = ((x as f32 - cx).powi(2) + (y as f32 - cy).powi(2)).sqrt();
-        let ring = (dist - radius).abs() < 12.0;
+        let inside = symbol.contains((x as f32 - cx) / half, (y as f32 - cy) / half);
         let stripe = (x + y) / 40 % 2 == 0;
-        let (h2, s2, v) = if ring {
+        let (h2, s2, v) = if inside {
             (hue, 0.0, 1.0)
         } else if stripe {
             (hue, 0.7, shade)

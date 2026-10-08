@@ -52,7 +52,7 @@ cargo run -- --config config.local.toml --output out.png --size 1920x1080 --once
 just check                       # fmt --check, clippy, tests
 just integration                 # sync the Drive development copy, run tests/drive_integration.rs
 just window                      # same, but show the slideshow in a desktop window (Esc quits)
-just window-sample               # window preview of 60 generated mixed-shape pictures, no Drive
+just window-sample               # window preview of 60 generated pictures, each subject with its own symbol in the middle, no Drive
 just render                      # sync Drive (development copy) with rclone, render out.png
 just env=production run          # same, against the production Drive copy
 ```
