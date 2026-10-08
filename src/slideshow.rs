@@ -1,12 +1,13 @@
 //! One slideshow cycle: pick a subject, build a collage, fade it in.
 
+use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use image::RgbImage;
 use rand::Rng;
 use rand::rngs::ThreadRng;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::config::Config;
 use crate::display::Display;
@@ -58,19 +59,26 @@ impl<R: Rng> Slideshow<R> {
         info!("showing '{}' ({} pictures)", subject.name, subject.images.len());
 
         let (width, height) = display.size();
-        let mut count = config.tiles.min(subject.images.len());
-        // Offer every picture, not just the first few, so unreadable files can be skipped.
-        let candidates = library::shuffled_images(subject, &mut self.rng);
+        let count = config.tiles.min(subject.images.len());
+        let (mut aspects, all) = probe(library::shuffled_images(subject, &mut self.rng), count);
         // If unreadable pictures leave tiles empty, lay out again with fewer tiles so no hole
-        // shows. `filled < tiles.len() <= count`, so `count` shrinks and the loop ends.
+        // shows. `filled < tiles.len() <= aspects.len()`, so `aspects` shrinks and the loop ends.
         let next = loop {
-            let tiles = layout::varied(width, height, count, config.gap_px, &mut self.rng);
+            let fit = layout::best_fit(
+                width,
+                height,
+                &aspects,
+                config.gap_px,
+                FIT_ATTEMPTS,
+                &mut self.rng,
+            );
+            let ordered = in_tile_order(&all, &fit.order);
             let (canvas, filled) =
-                collage::build(width, height, config.background, &tiles, &candidates);
-            if filled == tiles.len() || filled == 0 {
+                collage::build(width, height, config.background, &fit.tiles, &ordered);
+            if filled == fit.tiles.len() || filled == 0 {
                 break canvas;
             }
-            count = filled;
+            aspects.truncate(filled);
         };
 
         let fade = Duration::from_millis(config.fade_ms);
@@ -79,6 +87,45 @@ impl<R: Rng> Slideshow<R> {
         self.previous_subject = Some(subject.name.clone());
         Ok(())
     }
+}
+
+/// Candidate layouts tried per collage; each is cheap geometry, so this costs microseconds.
+const FIT_ATTEMPTS: usize = 24;
+
+/// Reads the shape of the first `count` pictures that open, from their headers. Returns their
+/// aspect ratios and every picture to offer the collage: those first, then the untouched rest as
+/// spares in case one fails to decode later. Pictures that cannot be opened are dropped.
+fn probe(pool: Vec<PathBuf>, count: usize) -> (Vec<f64>, Vec<PathBuf>) {
+    let mut aspects = Vec::with_capacity(count);
+    let mut all = Vec::with_capacity(pool.len());
+    let mut spares = Vec::new();
+    for path in pool {
+        if aspects.len() == count {
+            spares.push(path);
+        } else {
+            match collage::probe_aspect(&path) {
+                Ok(aspect) => {
+                    aspects.push(aspect);
+                    all.push(path);
+                }
+                Err(err) => warn!("skipping {}: {err:#}", path.display()),
+            }
+        }
+    }
+    all.extend(spares);
+    (aspects, all)
+}
+
+/// `all` reordered so index `i` is the picture for tile `i`, followed by the pictures that got no
+/// tile. `collage::build` fills tiles in order and falls through to the spares on failures.
+fn in_tile_order(all: &[PathBuf], order: &[usize]) -> Vec<PathBuf> {
+    let mut used = vec![false; all.len()];
+    for &i in order {
+        used[i] = true;
+    }
+    let placed = order.iter().map(|&i| all[i].clone());
+    let unplaced = all.iter().zip(&used).filter(|(_, used)| !**used).map(|(p, _)| p.clone());
+    placed.chain(unplaced).collect()
 }
 
 #[cfg(test)]
@@ -154,6 +201,31 @@ mod tests {
             seen.push(show.current_subject().unwrap().to_owned());
         }
         assert!(seen.windows(2).all(|pair| pair[0] != pair[1]), "repeated subject in {seen:?}");
+    }
+
+    #[test]
+    fn tile_order_puts_assigned_pictures_first_then_spares() {
+        let all: Vec<PathBuf> = ["a", "b", "c", "d"].iter().map(PathBuf::from).collect();
+        let ordered = in_tile_order(&all, &[2, 0]);
+        assert_eq!(ordered, ["c", "a", "b", "d"].iter().map(PathBuf::from).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn probe_skips_unopenable_pictures_and_keeps_spares() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut pool = Vec::new();
+        for (name, w, h) in [("wide", 40, 20), ("tall", 20, 40), ("spare", 10, 10)] {
+            let path = dir.path().join(format!("{name}.png"));
+            RgbImage::new(w, h).save(&path).unwrap();
+            pool.push(path);
+        }
+        pool.insert(1, dir.path().join("missing.png"));
+
+        let (aspects, all) = probe(pool, 2);
+
+        assert_eq!(aspects, [2.0, 0.5]);
+        assert_eq!(all.len(), 3);
+        assert!(all[2].ends_with("spare.png"));
     }
 
     #[test]

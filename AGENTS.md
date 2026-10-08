@@ -28,7 +28,7 @@ well-known maintained crates.
 | Module | Responsibility |
 | --- | --- |
 | `config` | TOML config (`/etc/orange-you-glad.toml`), defaults and validation |
-| `layout` | Pure geometry: random splits of a random tile into varied-size rectangles |
+| `layout` | Pure geometry: random splits into varied-size rectangles, best of N fitted to the photos' aspect ratios |
 | `library` | Resolve subjects (uuid lists) to image files, pick a subject |
 | `collage` | Decode one photo at a time, cover-crop and scale it into its tile |
 | `display` | `Display` trait plus framebuffer and image-file implementations |
