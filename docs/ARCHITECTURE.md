@@ -7,7 +7,7 @@ flowchart LR
     GD[Shared Google Drive folder] -- rclone sync --> LIB[(Library root on disk)]
     LIB --> L[library: pick subject and files]
     CFG[config] --> S
-    L --> S[Slideshow loop in main]
+    L --> S[slideshow cycle driven by main]
     S --> LY[layout: random binary splits]
     LY --> C[collage: decode one photo at a time, scale, place]
     C --> F[fade: blend previous and next frame]
@@ -30,24 +30,30 @@ render the collage into the "next" frame, cross-fade from "previous" to "next" t
 | `collage` | Decode, scale and place photos into a frame |
 | `display` | `Display` trait; framebuffer and PNG implementations |
 | `fade` | Blend two frames into a scratch frame, push each step to a `Display` |
-| `main` | CLI, logging, `Slideshow` |
+| `slideshow` | One cycle: rescan, pick a subject, build a collage, fade it in |
+| `main` | CLI parsing, logging, display selection, the loop |
 
 ## Memory budget at 1920x1080
 
-These are estimates from pixel counts, not measurements.
+Memory, not speed, is the design constraint: a new collage is only needed every few minutes
+(`interval_secs`, default 300), so the code trades CPU time for a small, predictable footprint.
 
 | Item | Size |
 | --- | --- |
-| Previous frame, RGB (1920 x 1080 x 3) | about 6.2 MB |
-| Next frame, RGB | about 6.2 MB |
+| Current frame, RGB (1920 x 1080 x 3) | about 6.2 MB |
+| Next frame, RGB (the canvas being built) | about 6.2 MB |
 | Blend scratch frame, RGB | about 6.2 MB |
 | Encode buffer in framebuffer pixel format (32 bpp) | about 8.3 MB |
-| One decoded photo at a time (a 12 MP photo is about 36 MB as RGB) | transient, up to roughly 40 MB |
-| Total working set | roughly 70 MB |
+| Steady state while a slide is on screen | about 21 MB |
+| Peak while building a collage | about 98 MB measured (12 MP photos) |
 
-Decoding one photo at a time and dropping it before the next keeps the peak well under the
-1 GB board limit, leaving room for the OS and page cache. The systemd unit also sets
-`MemoryMax` as a safety net.
+The peak is measured by `tests/memory.rs` with `dhat` and checked against a 128 MB budget. It is
+dominated by one decoded photo (36 MB as RGB at 12 MP) plus decoder and resize scratch buffers
+(which grow with tile size). Pictures are decoded one at a time and dropped before the next, so
+the peak does not grow with the number of tiles. A single picture is refused above 256 MB of
+decode memory. That leaves most of the 1 GB for the OS and page cache; the systemd unit also
+sets `MemoryMax` as a safety net. These are desktop measurements; the board has not been
+profiled yet.
 
 ## Why the framebuffer
 

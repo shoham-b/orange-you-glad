@@ -6,7 +6,7 @@
 # library_root = "/var/lib/orange-you-glad/photos"
 
 # Seconds each collage stays on screen before the next one fades in.
-# interval_secs = 60
+# interval_secs = 300
 
 # Number of photo tiles per collage.
 # tiles = 6
