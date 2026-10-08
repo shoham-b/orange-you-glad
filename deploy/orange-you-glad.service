@@ -32,6 +32,8 @@ SystemCallFilter=@system-service
 DevicePolicy=closed
 DeviceAllow=/dev/fb0 rw
 ReadOnlyPaths=/var/lib/orange-you-glad
+# Same user as the sync job, so hide the Drive credentials from the slideshow.
+InaccessiblePaths=-/var/lib/orange-you-glad/rclone.conf -/var/lib/orange-you-glad/service-account.json
 # Keep a runaway process from starving the 1 GB board.
 MemoryMax=600M
 
