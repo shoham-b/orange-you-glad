@@ -42,7 +42,7 @@ See `deploy/config.example.toml`.
 | `library_root` | none (required) | Directory whose immediate subfolders are subjects |
 | `interval_secs` | `300` | Seconds each collage stays on screen |
 | `tiles` | `6` | Photos per collage |
-| `gap_px` | `8` | Gap between tiles, in pixels |
+| `gap_px` | `0` | Gap between tiles, in pixels |
 | `fade_ms` | `1500` | Cross-fade duration, in milliseconds |
 | `background` | `[0, 0, 0]` | Gap colour as `[r, g, b]` |
 | `framebuffer` | `/dev/fb0` | Framebuffer device |

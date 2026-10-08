@@ -14,16 +14,18 @@ const MAX_DECODE_BYTES: u64 = 256 * 1024 * 1024;
 
 /// Fills each tile, in order, with the next candidate picture that decodes successfully.
 /// Pictures are decoded and shrunk one at a time so peak memory stays small on a 1 GB board.
-/// Tiles left over when candidates run out keep the background colour.
+/// Tiles left over when candidates run out keep the background colour; the returned count is how
+/// many tiles got a picture, so the caller can lay out again with fewer tiles and leave no holes.
 pub fn build(
     width: u32,
     height: u32,
     background: [u8; 3],
     tiles: &[Rect],
     candidates: &[PathBuf],
-) -> RgbImage {
+) -> (RgbImage, usize) {
     let mut canvas = RgbImage::from_pixel(width, height, Rgb(background));
     let mut remaining = candidates.iter();
+    let mut filled = 0;
     for tile in tiles {
         let picture = remaining.by_ref().find_map(|path| match load_tile(path, tile) {
             Ok(picture) => Some(picture),
@@ -34,8 +36,9 @@ pub fn build(
         });
         let Some(picture) = picture else { break };
         imageops::replace(&mut canvas, &picture, i64::from(tile.x), i64::from(tile.y));
+        filled += 1;
     }
-    canvas
+    (canvas, filled)
 }
 
 /// Decodes `path`, applies its EXIF rotation, and crops/scales it to exactly fill `tile`.
@@ -110,14 +113,16 @@ mod tests {
         write_solid(&good, [200, 10, 10]);
 
         let tile = Rect { x: 0, y: 0, w: 20, h: 20 };
-        let out = build(20, 20, [0, 0, 0], &[tile], &[bad, good]);
+        let (out, filled) = build(20, 20, [0, 0, 0], &[tile], &[bad, good]);
+        assert_eq!(filled, 1);
         assert_eq!(out.get_pixel(10, 10), &Rgb([200, 10, 10]));
     }
 
     #[test]
     fn missing_candidates_leave_background() {
         let tile = Rect { x: 0, y: 0, w: 10, h: 10 };
-        let out = build(10, 10, [1, 2, 3], &[tile], &[]);
+        let (out, filled) = build(10, 10, [1, 2, 3], &[tile], &[]);
+        assert_eq!(filled, 0);
         assert_eq!(out.get_pixel(5, 5), &Rgb([1, 2, 3]));
     }
 
@@ -129,7 +134,7 @@ mod tests {
         write_solid(&red, [255, 0, 0]);
         write_solid(&blue, [0, 0, 255]);
         let tiles = [Rect { x: 0, y: 0, w: 10, h: 10 }, Rect { x: 10, y: 0, w: 10, h: 10 }];
-        let out = build(20, 10, [0, 0, 0], &tiles, &[red, blue]);
+        let (out, _) = build(20, 10, [0, 0, 0], &tiles, &[red, blue]);
         assert_eq!(out.get_pixel(2, 2), &Rgb([255, 0, 0]));
         assert_eq!(out.get_pixel(17, 2), &Rgb([0, 0, 255]));
     }

@@ -11,8 +11,8 @@
 # Number of photo tiles per collage.
 # tiles = 6
 
-# Gap between tiles, and around the collage edge, in pixels.
-# gap_px = 8
+# Gap between tiles, in pixels. 0 (the default) makes the tiles meet with no gaps.
+# gap_px = 0
 
 # Duration of the cross-fade between collages, in milliseconds.
 # fade_ms = 1500
