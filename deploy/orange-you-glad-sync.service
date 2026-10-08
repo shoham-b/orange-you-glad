@@ -14,6 +14,7 @@ Environment=RCLONE_CONFIG=/var/lib/orange-you-glad/rclone.conf
 ExecStart=/usr/bin/rclone sync gdrive: /var/lib/orange-you-glad/photos \
   --ignore-case \
   --include "*.{jpg,jpeg,png,webp}" \
+  --include "orange-you-glad.toml" \
   --max-size 25M \
   --drive-skip-gdocs \
   --transfers 2 \

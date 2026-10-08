@@ -52,14 +52,16 @@ fn main() -> Result<()> {
 
     let mut slideshow = Slideshow::new(display.size());
     loop {
+        // Re-read each cycle so settings edited in Drive apply after the next sync.
+        let current = config.with_drive_overrides();
         // A failed cycle (e.g. nothing synced yet) is logged and retried next time.
-        if let Err(err) = slideshow.show_next(&config, display.as_mut()) {
+        if let Err(err) = slideshow.show_next(&current, display.as_mut()) {
             error!("{err:#}");
         }
         if args.once {
             return Ok(());
         }
-        thread::sleep(Duration::from_secs(config.interval_secs));
+        thread::sleep(Duration::from_secs(current.interval_secs));
     }
 }
 
