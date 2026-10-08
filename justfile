@@ -55,3 +55,7 @@ window-sample:
 # Sync the development Drive copy, then run the ignored tests in tests/drive_integration.rs.
 integration: sync
     cargo test --test drive_integration -- --ignored
+
+# Generate the shape pictures into scratch/drive-upload to copy into the Drive development folder (Processed/*, and merge Config/subjects.json into the existing one).
+sample-for-drive:
+    cargo run --example sample_library -- scratch/drive-upload
