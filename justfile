@@ -8,6 +8,7 @@ env := "development"
 folder := if env == "production" { "1foxxmTR49YCuahiHT8zbkNTgLo2DIKOS" } else if env == "development" { "1Ft5AAQ4Upz8UzcSyc2xIb1gThZaXgl_L" } else { error("env must be production or development") }
 photos := "scratch/photos/" + env
 config := "config." + env + ".local.toml"
+export OYG_LIBRARY := replace(justfile_directory(), "\\", "/") + "/" + photos
 root := replace(justfile_directory(), "\\", "/")
 
 default:
@@ -34,3 +35,7 @@ render: sync config
 # Sync, then keep running, rewriting out.png each cycle.
 run: sync config
     cargo run --release -- --config {{config}} --output out.png
+
+# Sync the development Drive copy, then run the ignored tests in tests/drive_integration.rs.
+integration: sync
+    cargo test --test drive_integration -- --ignored

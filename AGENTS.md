@@ -48,6 +48,7 @@ cargo test
 cargo bench                      # criterion benchmarks in benches/
 cargo run -- --config config.local.toml --output out.png --size 1920x1080 --once
 just check                       # fmt --check, clippy, tests
+just integration                 # sync the Drive development copy, run tests/drive_integration.rs
 just render                      # sync Drive (development copy) with rclone, render out.png
 just env=production run          # same, against the production Drive copy
 ```

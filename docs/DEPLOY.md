@@ -188,7 +188,13 @@ after the one-time `rclone config create gdrive drive scope=drive.readonly`:
 just render                      # sync development, write config.development.local.toml, render out.png
 just env=production run          # keep running against production
 just check                       # fmt, clippy, tests
+just integration                 # sync the development copy, run the ignored Drive tests
 ```
+
+The `development` copy holds eight single-colour pictures (subjects `warm`, `cool`, `neutral`,
+`sample`) and short-interval settings. `tests/drive_integration.rs` checks against it that
+subjects resolve, settings apply, and every collage is gap-free and made only of those colours;
+its tests are `#[ignore]`d so plain `cargo test` and CI do not need Drive.
 
 ## Troubleshooting
 
