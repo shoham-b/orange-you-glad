@@ -2,7 +2,8 @@
 # Install as /etc/orange-you-glad.toml. Every key is optional except library_root;
 # the values shown are the defaults.
 
-# Directory whose immediate subfolders are "subjects" (each holds that subject's photos).
+# Directory mirroring the Drive folder: Config/subjects.json (subject name -> list of uuids)
+# and Processed/<uuid>.<ext> (the pictures).
 # library_root = "/var/lib/orange-you-glad/photos"
 
 # Seconds each collage stays on screen before the next one fades in.

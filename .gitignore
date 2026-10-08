@@ -21,7 +21,9 @@ Cargo.toml.orig
 *.swp
 .DS_Store
 Thumbs.db
+.preview/
 
 # Drive service-account keys
 *.sa.json
 /secrets/
+.preview/

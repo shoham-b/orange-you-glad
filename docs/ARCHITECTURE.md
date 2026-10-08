@@ -26,7 +26,7 @@ render the collage into the "next" frame, cross-fade from "previous" to "next" t
 | --- | --- |
 | `config` | Parse TOML, apply defaults, validate |
 | `layout` | Pure function from (size, tiles, gap, RNG) to tile rectangles |
-| `library` | Walk the library root; subjects are its immediate subfolders |
+| `library` | Read `Config/subjects.json` and resolve uuids to files in `Processed/` |
 | `collage` | Decode, scale and place photos into a frame |
 | `display` | `Display` trait; framebuffer and PNG implementations |
 | `fade` | Blend two frames into a scratch frame, push each step to a `Display` |

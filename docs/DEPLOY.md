@@ -125,20 +125,23 @@ Restrict the config file, which also holds the token that rclone refreshes:
 sudo chmod 600 /var/lib/orange-you-glad/rclone.conf
 ```
 
-Alternative if you do not know the folder ID: skip `root_folder_id` and add
-`--drive-shared-with-me` to the sync command; the remote root then lists everything shared with
-the account, so each shared folder becomes a subject.
+Set `root_folder_id` to the folder that directly contains `Incoming/`, `Processed/`, `Errored/` and
+`Config/`. Pictures are `Processed/<uuid>.<ext>`; `Config/subjects.json` maps subject names to
+uuid lists, for example `{"dog": ["<uuid>", "<uuid>"], "ski": ["<uuid>"]}`. A uuid may appear
+under several subjects.
 
 Test a dry run:
 
 ```sh
 sudo -u orange-you-glad env RCLONE_CONFIG=/var/lib/orange-you-glad/rclone.conf \
   rclone sync gdrive: /var/lib/orange-you-glad/photos --dry-run --max-delete 50 \
-  --ignore-case --include "*.{jpg,jpeg,png,webp}" --include "orange-you-glad.toml" --max-size 25M
+  --ignore-case --include "/Processed/*.{jpg,jpeg,png,webp}" --include "/Config/*.{json,toml}" \
+  --max-size 25M
 ```
 
-The extra `--include` lets the optional settings file through (see "Settings from Drive" below).
-Keep it in step with the sync service unit's command.
+The Drive folder holds `Incoming/`, `Processed/`, `Errored/` and `Config/`. The `--include` rules
+mirror only `Processed/` and `Config/`; `Incoming/` and `Errored/` belong to the intake agent and
+are never downloaded. Keep these rules in step with the sync service unit's command.
 
 Note that `rclone sync` makes the destination match the source, deleting local files that are no
 longer in Drive. Never point it at a directory holding anything else. `--max-delete 50` aborts a
@@ -163,12 +166,16 @@ at a time while reading `journalctl -u orange-you-glad`.
 
 ## Settings from Drive
 
-Put a file named `orange-you-glad.toml` in the top level of the shared Drive folder. After the
-next sync the slideshow applies it at the start of the next cycle, no restart needed. It may set
-`interval_secs`, `tiles`, `gap_px`, `fade_ms` and `background` (same meaning as in
-`/etc/orange-you-glad.toml`); unset keys keep the local values. `library_root` and `framebuffer`
-cannot be changed this way. A file with a typo or an invalid value is ignored with a warning in
-the journal.
+Put a file named `settings.toml` in the `Config/` folder of the shared Drive folder. After the
+next sync the slideshow picks it up, no restart needed. It may set `interval_secs`, `tiles`,
+`gap_px`, `fade_ms` and `background` (same meaning as in `/etc/orange-you-glad.toml`); unset keys
+keep the local values. `library_root` and `framebuffer` cannot be changed this way.
+
+The board re-reads the file every 60 seconds, so a new `interval_secs` applies within a minute.
+While the file has a typo or an invalid value, the last good settings stay in force and the board
+re-reads it every 10 seconds until it is fixed. It retries at the same pace when no collage can be
+built (for example `subjects.json` is missing or invalid). Each problem is logged once in the
+journal, and again when it recovers.
 
 ## Local development against Drive
 
@@ -191,9 +198,17 @@ just check                       # fmt, clippy, tests
 | Screen is blank or the console reappears | Another process owns the display; stop any `getty` or desktop on tty1; verify the kernel arguments from step 2 |
 | Screen blanks after a few minutes | `consoleblank=0` missing from `/proc/cmdline` |
 | Garbled or shifted image | Resolution or stride mismatch; recheck `virtual_size`, `stride`, `bits_per_pixel` |
-| No photos shown | `library_root` wrong, or no subfolders containing `.jpg`, `.jpeg`, `.png` or `.webp` files; run with `RUST_LOG=debug` |
+| No photos shown | `library_root` wrong, `Config/subjects.json` missing or invalid, or its uuids have no matching file in `Processed/` yet (unsynced uuids are logged as warnings); run with `RUST_LOG=debug` |
 | Sync fails with auth errors | Wrong system clock (`timedatectl`); expired token (an OAuth app in "Testing" status expires after 7 days: run `rclone config reconnect gdrive:` or switch to a service account); wrong scope |
 | Sync aborts with a max-delete error | Drive listed far fewer files than expected; check `root_folder_id` and that the folder is still shared, then raise `--max-delete` if the removal was intended |
 | Sync copies nothing | Wrong `root_folder_id`, or the folder is not shared with the authorizing account |
 | Out-of-memory kills | Check `journalctl -k`; reduce `tiles`; lower `--max-size`; confirm swap or zram |
 | Blinking cursor visible | `vt.global_cursor_default=0` missing from the kernel arguments |
+
+## Previewing on a PC
+
+`scripts/preview.ps1` mimics the board on Windows: it syncs the Drive folder with the same rclone
+flags as the sync unit into `.preview/photos`, runs the app with `--output .preview/screen.png`,
+and opens `scripts/viewer.html` in an Edge app window that shows the frames live, fades included.
+Needs rclone with a `gdrive` remote (step 6). Use `-SkipSync` to reuse downloaded photos and
+`-IntervalSecs` to change the slide interval. It does not exercise the framebuffer code.

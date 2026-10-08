@@ -6,8 +6,8 @@ folder, and draws straight to the Linux framebuffer. No X server, no desktop.
 
 ## Features
 
-- Subjects: each immediate subfolder of the library root is a subject; one subject is picked per
-  collage.
+- Subjects: `Config/subjects.json` maps each subject name to the uuids of its pictures (files in
+  `Processed/`); one subject is picked per collage.
 - Collages with varied tile sizes, built by random binary splits of the screen.
 - Smooth cross-fade from the previous collage to the next.
 - Writes directly to `/dev/fb0`, or to a PNG file in dev mode.
@@ -20,7 +20,7 @@ Dev mode renders to a PNG instead of the framebuffer, so it works on any machine
 
 ```sh
 cp deploy/config.example.toml config.local.toml
-# edit config.local.toml: uncomment and set library_root to a folder of subject folders
+# edit config.local.toml: uncomment and set library_root to a folder holding Config/subjects.json and Processed/
 cargo run -- --config config.local.toml --output out.png --size 1920x1080 --once
 ```
 
@@ -39,7 +39,7 @@ See `deploy/config.example.toml`.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `library_root` | none (required) | Directory whose immediate subfolders are subjects |
+| `library_root` | none (required) | Directory holding `Config/subjects.json` and `Processed/` |
 | `interval_secs` | `300` | Seconds each collage stays on screen |
 | `tiles` | `6` | Photos per collage |
 | `gap_px` | `0` | Gap between tiles, in pixels |
