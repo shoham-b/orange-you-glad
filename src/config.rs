@@ -43,10 +43,10 @@ fn default_framebuffer() -> PathBuf {
     PathBuf::from("/dev/fb0")
 }
 
-/// Name of the optional settings file looked up inside `library_root` (the synced Drive folder).
-pub const DRIVE_CONFIG_FILE: &str = "orange-you-glad.toml";
+/// Optional settings file inside `library_root` (the synced Drive folder).
+pub const SETTINGS_FILE: &str = "Config/settings.toml";
 
-/// Settings that may be changed from the Drive file. Device-level keys (`library_root`,
+/// Settings that may be changed from the Drive settings file. Device-level keys (`library_root`,
 /// `framebuffer`) are excluded on purpose: a Drive edit must not be able to blank the screen.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -65,7 +65,7 @@ impl Config {
     /// typo made in Drive keeps the show running with the local settings.
     #[must_use]
     pub fn with_drive_overrides(&self) -> Config {
-        let path = self.library_root.join(DRIVE_CONFIG_FILE);
+        let path = self.library_root.join(SETTINGS_FILE);
         let text = match std::fs::read_to_string(&path) {
             Ok(text) => text,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return self.clone(),
@@ -140,11 +140,16 @@ mod tests {
         toml::from_str(&format!("library_root = {root:?}\ntiles = 4")).unwrap()
     }
 
+    fn write_settings(root: &Path, text: &str) {
+        let file = root.join(SETTINGS_FILE);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, text).unwrap();
+    }
+
     #[test]
     fn drive_file_overrides_only_the_keys_it_sets() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join(DRIVE_CONFIG_FILE), "interval_secs = 60\ngap_px = 0")
-            .unwrap();
+        write_settings(dir.path(), "interval_secs = 60\ngap_px = 0");
         let c = base(dir.path()).with_drive_overrides();
         assert_eq!((c.interval_secs, c.gap_px, c.tiles), (60, 0, 4));
     }
@@ -158,9 +163,8 @@ mod tests {
     #[test]
     fn bad_drive_files_are_ignored() {
         let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join(DRIVE_CONFIG_FILE);
         for bad in ["tiles = 0", "tiles = ", "framebuffer = \"/dev/null\"", "typo = 1"] {
-            std::fs::write(&file, bad).unwrap();
+            write_settings(dir.path(), bad);
             assert_eq!(base(dir.path()).with_drive_overrides().tiles, 4, "{bad}");
             assert_eq!(
                 base(dir.path()).with_drive_overrides().framebuffer,
