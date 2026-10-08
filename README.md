@@ -8,6 +8,8 @@ folder, and draws straight to the Linux framebuffer. No X server, no desktop.
 
 - Subjects: `Config/subjects.json` maps each subject name to the uuids of its pictures (files in
   `Processed/`); one subject is picked per collage.
+- Birthdays: `Config/family.json` gives each family member a Hebrew birthday and pictures; on that
+  day the collages show only their pictures.
 - Collages with varied tile sizes, built by random binary splits of the screen.
 - Smooth cross-fade from the previous collage to the next.
 - Writes directly to `/dev/fb0`, or to a PNG file in dev mode.

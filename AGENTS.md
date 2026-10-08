@@ -30,6 +30,8 @@ well-known maintained crates.
 | `config` | TOML config (`/etc/orange-you-glad.toml`), defaults and validation |
 | `layout` | Pure geometry: random splits of a random tile into varied-size rectangles |
 | `library` | Resolve subjects (uuid lists) to image files, pick a subject |
+| `hebrew` | Pure Gregorian to Hebrew date conversion |
+| `family` | `Config/family.json`: Hebrew birthdays and pictures; subjects for today's birthdays |
 | `collage` | Decode one photo at a time, cover-crop and scale it into its tile |
 | `display` | `Display` trait plus framebuffer and image-file implementations |
 | `fade` | Cross-fade between two frames, written through a `Display` |

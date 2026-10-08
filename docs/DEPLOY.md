@@ -130,6 +130,14 @@ Set `root_folder_id` to the folder that directly contains `Incoming/`, `Processe
 uuid lists, for example `{"dog": ["<uuid>", "<uuid>"], "ski": ["<uuid>"]}`. A uuid may appear
 under several subjects.
 
+`Config/family.json` lists family members with their Hebrew birthday and pictures, for example
+`{"Dana": {"birthday": "15 Shevat", "pictures": ["<uuid>"]}}`. Months are Nisan, Iyar, Sivan,
+Tamuz, Av, Elul, Tishrei, Cheshvan, Kislev, Tevet, Shevat, Adar, Adar I, Adar II (plain `Adar` is
+Adar II in a leap year). A 30 Cheshvan or 30 Kislev birthday is kept on the 29th in years when the
+month is short. On that Hebrew date (by the board's local date, so set its timezone) only the
+birthday person's pictures are shown. A missing file means no birthdays; an invalid one is logged
+and ignored.
+
 Test a dry run:
 
 ```sh

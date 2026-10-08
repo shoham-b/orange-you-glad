@@ -3,14 +3,15 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use chrono::{Local, NaiveDate};
 use image::RgbImage;
 use rand::Rng;
 use rand::rngs::ThreadRng;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::config::Config;
 use crate::display::Display;
-use crate::{collage, fade, layout, library};
+use crate::{collage, fade, family, hebrew, layout, library};
 
 /// What the show remembers between cycles.
 pub struct Slideshow<R: Rng = ThreadRng> {
@@ -49,7 +50,28 @@ impl<R: Rng> Slideshow<R> {
     /// Fails when the library cannot be read or is empty, or when the display rejects a frame.
     /// The show is left unchanged, so the caller can simply retry later.
     pub fn show_next(&mut self, config: &Config, display: &mut dyn Display) -> Result<()> {
-        let subjects = library::scan(&config.library_root)?;
+        self.show_on(Local::now().date_naive(), config, display)
+    }
+
+    /// Like [`Self::show_next`] for a given local date. On a family member's Hebrew birthday
+    /// only the birthday people's pictures are shown.
+    pub fn show_on(
+        &mut self,
+        today: NaiveDate,
+        config: &Config,
+        display: &mut dyn Display,
+    ) -> Result<()> {
+        let mut subjects =
+            match family::birthday_subjects(&config.library_root, hebrew::from_gregorian(today)) {
+                Ok(birthdays) => birthdays,
+                Err(err) => {
+                    warn!("ignoring family birthdays: {err:#}");
+                    Vec::new()
+                }
+            };
+        if subjects.is_empty() {
+            subjects = library::scan(&config.library_root)?;
+        }
         let subject =
             library::pick_subject(&subjects, self.previous_subject.as_deref(), &mut self.rng)
                 .with_context(|| {
@@ -182,5 +204,42 @@ mod tests {
         assert!(show.show_next(&config(dir.path()), &mut display).is_err());
         assert!(show.current_subject().is_none());
         assert_eq!(display.frames.len(), 0);
+    }
+
+    #[test]
+    fn birthday_person_replaces_the_usual_subjects_for_the_day() {
+        let dir = tempfile::tempdir().unwrap();
+        photo(dir.path(), "red", [250, 0, 0]);
+        photo(dir.path(), "blue", [0, 0, 250]);
+        list_subjects(dir.path(), r#"{"blue": ["blue"]}"#);
+        std::fs::write(
+            dir.path().join("Config/family.json"),
+            r#"{"Dana": {"birthday": "27 Tishrei", "pictures": ["red"]}}"#,
+        )
+        .unwrap();
+        let mut display = Recorder { size: (16, 16), frames: Vec::new() };
+        let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
+        let birthday = NaiveDate::from_ymd_opt(2026, 10, 8).unwrap(); // 27 Tishrei 5787
+
+        for _ in 0..3 {
+            show.show_on(birthday, &config(dir.path()), &mut display).unwrap();
+            assert_eq!(show.current_subject(), Some("Dana"));
+        }
+        show.show_on(birthday.succ_opt().unwrap(), &config(dir.path()), &mut display).unwrap();
+        assert_eq!(show.current_subject(), Some("blue"));
+    }
+
+    #[test]
+    fn broken_family_file_does_not_stop_the_show() {
+        let dir = tempfile::tempdir().unwrap();
+        photo(dir.path(), "blue", [0, 0, 250]);
+        list_subjects(dir.path(), r#"{"blue": ["blue"]}"#);
+        std::fs::write(dir.path().join("Config/family.json"), "{ nope").unwrap();
+        let mut display = Recorder { size: (16, 16), frames: Vec::new() };
+        let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
+
+        show.show_next(&config(dir.path()), &mut display).unwrap();
+
+        assert_eq!(show.current_subject(), Some("blue"));
     }
 }

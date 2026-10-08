@@ -41,31 +41,37 @@ pub fn scan(root: &Path) -> Result<Vec<Subject>> {
         serde_json::from_str(&text).with_context(|| format!("invalid {}", path.display()))?;
     let files = index_processed(&root.join(PROCESSED_DIR))?;
 
-    let mut subjects = Vec::new();
-    for (name, uuids) in listed {
-        let mut images: Vec<PathBuf> = Vec::new();
-        let mut missing = 0_usize;
-        for uuid in &uuids {
-            match files.get(&uuid.to_ascii_lowercase()) {
-                Some(file) if !images.contains(file) => images.push(file.clone()),
-                Some(_) => {}
-                None => missing += 1,
-            }
-        }
-        if missing > 0 {
-            warn!("subject '{name}': {missing} listed picture(s) not synced yet");
-        }
-        if !images.is_empty() {
-            subjects.push(Subject { name, images });
+    let subjects =
+        listed.into_iter().filter_map(|(name, uuids)| resolve(name, &uuids, &files)).collect();
+    Ok(subjects)
+}
+
+/// The subject `name` made of the pictures `uuids` that exist in `files` (see
+/// [`index_processed`]), or `None` when none do.
+pub(crate) fn resolve(
+    name: String,
+    uuids: &[String],
+    files: &HashMap<String, PathBuf>,
+) -> Option<Subject> {
+    let mut images: Vec<PathBuf> = Vec::new();
+    let mut missing = 0_usize;
+    for uuid in uuids {
+        match files.get(&uuid.to_ascii_lowercase()) {
+            Some(file) if !images.contains(file) => images.push(file.clone()),
+            Some(_) => {}
+            None => missing += 1,
         }
     }
-    Ok(subjects)
+    if missing > 0 {
+        warn!("subject '{name}': {missing} listed picture(s) not synced yet");
+    }
+    (!images.is_empty()).then_some(Subject { name, images })
 }
 
 /// Lowercased file stem (the uuid) to path, for every picture directly inside `dir`.
 /// Looking uuids up here, rather than joining them onto a path, keeps a bad entry in the
 /// subjects file from pointing outside `Processed`.
-fn index_processed(dir: &Path) -> Result<HashMap<String, PathBuf>> {
+pub(crate) fn index_processed(dir: &Path) -> Result<HashMap<String, PathBuf>> {
     let entries = std::fs::read_dir(dir)
         .with_context(|| format!("cannot read pictures folder {}", dir.display()))?;
     let mut files = HashMap::new();
