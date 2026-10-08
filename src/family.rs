@@ -1,4 +1,4 @@
-//! Family members' Hebrew birthdays and their pictures, from `Config/family.json`.
+//! Family members' Hebrew birthdays, from `Config/family.json`.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -8,23 +8,14 @@ use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
 use crate::hebrew::{self, ADAR, ADAR_II, HebrewDate};
-use crate::library::{self, PROCESSED_DIR, Subject};
 
 /// Family file inside the library root, next to `subjects.json`.
 pub const FAMILY_FILE: &str = "Config/family.json";
 
-/// Wire format: `{"Dana": {"birthday": "15/5", "pictures": ["uuid", ...]}}`. `pictures` are
-/// uuids of files in `Processed`, like in `subjects.json`.
+/// Wire format: `{"Dana": "15/5", ...}`, name to birthday. A name is also the subject in
+/// `subjects.json` that holds the person's pictures.
 #[derive(Debug, Deserialize)]
-struct FamilyFile(BTreeMap<String, Person>);
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Person {
-    birthday: Birthday,
-    #[serde(default)]
-    pictures: Vec<String>,
-}
+struct FamilyFile(BTreeMap<String, Birthday>);
 
 /// Month of a birthday, numbered from Tishrei = 1 as in an ordinary year.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -101,14 +92,14 @@ impl Birthday {
     }
 }
 
-/// One subject per person whose birthday is `today` and who has pictures that are synced,
-/// named after the person.
+/// Names of the people whose birthday is `today`. Each name is also a subject in
+/// `subjects.json`, which holds that person's pictures.
 ///
 /// A missing family file means nobody is celebrated.
 ///
 /// # Errors
-/// Fails when the family file or the pictures folder cannot be read, or the file is invalid.
-pub fn birthday_subjects(root: &Path, today: HebrewDate) -> Result<Vec<Subject>> {
+/// Fails when the family file cannot be read or is invalid.
+pub fn birthday_people(root: &Path, today: HebrewDate) -> Result<Vec<String>> {
     let path = root.join(FAMILY_FILE);
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
@@ -117,15 +108,10 @@ pub fn birthday_subjects(root: &Path, today: HebrewDate) -> Result<Vec<Subject>>
     };
     let FamilyFile(people) =
         serde_json::from_str(&text).with_context(|| format!("invalid {}", path.display()))?;
-    let celebrated: Vec<_> =
-        people.into_iter().filter(|(_, p)| p.birthday.falls_on(today)).collect();
-    if celebrated.is_empty() {
-        return Ok(Vec::new());
-    }
-    let files = library::index_processed(&root.join(PROCESSED_DIR))?;
-    Ok(celebrated
+    Ok(people
         .into_iter()
-        .filter_map(|(name, person)| library::resolve(name, &person.pictures, &files))
+        .filter(|(_, birthday)| birthday.falls_on(today))
+        .map(|(n, _)| n)
         .collect())
 }
 
@@ -184,45 +170,30 @@ mod tests {
         assert!(!bday("30/2").falls_on(on(long, CHESHVAN, 29)));
     }
 
-    fn library(family: Option<&str>, files: &[&str]) -> tempfile::TempDir {
+    fn root_with(family: Option<&str>) -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dir.path().join("Config")).unwrap();
-        fs::create_dir_all(dir.path().join(PROCESSED_DIR)).unwrap();
         if let Some(text) = family {
             fs::write(dir.path().join(FAMILY_FILE), text).unwrap();
-        }
-        for file in files {
-            fs::write(dir.path().join(PROCESSED_DIR).join(file), b"x").unwrap();
         }
         dir
     }
 
-    const FAMILY: &str = r#"{
-        "Dana": {"birthday": "15/5", "pictures": ["d1", "d2", "later"]},
-        "Omer": {"birthday": "15/5"},
-        "Noa": {"birthday": "1/8", "pictures": ["n1"]}
-    }"#;
-
     #[test]
-    fn birthday_person_with_synced_pictures_becomes_a_subject() {
-        let dir = library(Some(FAMILY), &["d1.jpg", "d2.png", "n1.jpg"]);
+    fn lists_the_people_whose_birthday_is_today() {
+        let dir = root_with(Some(r#"{"Dana": "15/5", "Omer": "15/5", "Noa": "1/7"}"#));
 
-        let subjects = birthday_subjects(dir.path(), on(5786, 11, 15)).unwrap();
-
-        // Omer has the same birthday but no pictures; Noa's is another day.
-        assert_eq!(subjects.len(), 1);
-        assert_eq!(subjects[0].name, "Dana");
-        assert_eq!(subjects[0].images.len(), 2);
-        assert_eq!(birthday_subjects(dir.path(), on(5786, 11, 16)).unwrap(), vec![]);
+        assert_eq!(birthday_people(dir.path(), on(5786, 11, 15)).unwrap(), ["Dana", "Omer"]);
+        assert_eq!(birthday_people(dir.path(), on(5786, 11, 16)).unwrap(), Vec::<String>::new());
     }
 
     #[test]
     fn missing_family_file_means_no_birthdays_and_bad_one_is_an_error() {
-        let dir = library(None, &[]);
-        assert_eq!(birthday_subjects(dir.path(), on(5786, 11, 15)).unwrap(), vec![]);
-        for bad in ["{ nope", r#"{"A": {"birthday": "soon"}}"#, r#"{"A": {"pictures": []}}"#] {
+        let dir = root_with(None);
+        assert_eq!(birthday_people(dir.path(), on(5786, 11, 15)).unwrap(), Vec::<String>::new());
+        for bad in ["{ nope", r#"{"A": "soon"}"#, r#"{"A": {"birthday": "15/5"}}"#] {
             fs::write(dir.path().join(FAMILY_FILE), bad).unwrap();
-            assert!(birthday_subjects(dir.path(), on(5786, 11, 15)).is_err(), "{bad}");
+            assert!(birthday_people(dir.path(), on(5786, 11, 15)).is_err(), "{bad}");
         }
     }
 }

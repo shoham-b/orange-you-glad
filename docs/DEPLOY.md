@@ -130,15 +130,15 @@ Set `root_folder_id` to the folder that directly contains `Incoming/`, `Processe
 uuid lists, for example `{"dog": ["<uuid>", "<uuid>"], "ski": ["<uuid>"]}`. A uuid may appear
 under several subjects.
 
-`Config/family.json` lists family members with their Hebrew birthday and pictures, for example
-`{"Dana": {"birthday": "15/5", "pictures": ["<uuid>"]}}`. A birthday is `day/month` with months
-counted from Tishrei = 1: Cheshvan 2, Kislev 3, Tevet 4, Shevat 5, Adar 6, Nisan 7, Iyar 8, Sivan 9,
-Tamuz 10, Av 11, Elul 12 (so `15/5` is 15 Shevat). In a leap year write `6a` for Adar I or `6b` for
-Adar II (plain `6` means Adar II); in a year with only one Adar all of them fall in it. A 30 Cheshvan
-or 30 Kislev birthday is kept on the 29th in years when the
-month is short. On that Hebrew date (by the board's local date, so set its timezone) only the
-birthday person's pictures are shown. A missing file means no birthdays; an invalid one is logged
-and ignored.
+`Config/family.json` gives the Hebrew birthday of family members, for example
+`{"Dana": "15/5", "Omer": "27/1"}`. The name must match a subject in `subjects.json` (ignoring
+case); that subject holds the pictures, so pictures are only ever added in one place. A birthday is
+`day/month` with months counted from Tishrei = 1: Cheshvan 2, Kislev 3, Tevet 4, Shevat 5, Adar 6,
+Nisan 7, Iyar 8, Sivan 9, Tamuz 10, Av 11, Elul 12 (so `15/5` is 15 Shevat). In a leap year write
+`6a` for Adar I or `6b` for Adar II (plain `6` means Adar II); in a year with only one Adar all of
+them fall in it. A 30 Cheshvan or 30 Kislev birthday is kept on the 29th in years when the month is
+short. On that Hebrew date (by the board's local date, so set its timezone) only the birthday
+person's subject is shown. A missing file means no birthdays; an invalid one is logged and ignored.
 
 Test a dry run:
 

@@ -54,23 +54,27 @@ impl<R: Rng> Slideshow<R> {
     }
 
     /// Like [`Self::show_next`] for a given local date. On a family member's Hebrew birthday
-    /// only the birthday people's pictures are shown.
+    /// only the subjects named after the birthday people are shown.
     pub fn show_on(
         &mut self,
         today: NaiveDate,
         config: &Config,
         display: &mut dyn Display,
     ) -> Result<()> {
-        let mut subjects =
-            match family::birthday_subjects(&config.library_root, hebrew::from_gregorian(today)) {
-                Ok(birthdays) => birthdays,
-                Err(err) => {
+        let mut subjects = library::scan(&config.library_root)?;
+        let birthdays =
+            family::birthday_people(&config.library_root, hebrew::from_gregorian(today))
+                .unwrap_or_else(|err| {
                     warn!("ignoring family birthdays: {err:#}");
                     Vec::new()
-                }
-            };
-        if subjects.is_empty() {
-            subjects = library::scan(&config.library_root)?;
+                });
+        let celebrated: Vec<_> = subjects
+            .iter()
+            .filter(|s| birthdays.iter().any(|b| b.eq_ignore_ascii_case(&s.name)))
+            .cloned()
+            .collect();
+        if !celebrated.is_empty() {
+            subjects = celebrated;
         }
         let subject =
             library::pick_subject(&subjects, self.previous_subject.as_deref(), &mut self.rng)
@@ -211,12 +215,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         photo(dir.path(), "red", [250, 0, 0]);
         photo(dir.path(), "blue", [0, 0, 250]);
-        list_subjects(dir.path(), r#"{"blue": ["blue"]}"#);
-        std::fs::write(
-            dir.path().join("Config/family.json"),
-            r#"{"Dana": {"birthday": "27/1", "pictures": ["red"]}}"#,
-        )
-        .unwrap();
+        list_subjects(dir.path(), r#"{"blue": ["blue"], "Dana": ["red"]}"#);
+        std::fs::write(dir.path().join("Config/family.json"), r#"{"dana": "27/1"}"#).unwrap();
         let mut display = Recorder { size: (16, 16), frames: Vec::new() };
         let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
         let birthday = NaiveDate::from_ymd_opt(2026, 10, 8).unwrap(); // 27 Tishrei 5787

@@ -48,11 +48,7 @@ pub fn scan(root: &Path) -> Result<Vec<Subject>> {
 
 /// The subject `name` made of the pictures `uuids` that exist in `files` (see
 /// [`index_processed`]), or `None` when none do.
-pub(crate) fn resolve(
-    name: String,
-    uuids: &[String],
-    files: &HashMap<String, PathBuf>,
-) -> Option<Subject> {
+fn resolve(name: String, uuids: &[String], files: &HashMap<String, PathBuf>) -> Option<Subject> {
     let mut images: Vec<PathBuf> = Vec::new();
     let mut missing = 0_usize;
     for uuid in uuids {
@@ -71,7 +67,7 @@ pub(crate) fn resolve(
 /// Lowercased file stem (the uuid) to path, for every picture directly inside `dir`.
 /// Looking uuids up here, rather than joining them onto a path, keeps a bad entry in the
 /// subjects file from pointing outside `Processed`.
-pub(crate) fn index_processed(dir: &Path) -> Result<HashMap<String, PathBuf>> {
+fn index_processed(dir: &Path) -> Result<HashMap<String, PathBuf>> {
     let entries = std::fs::read_dir(dir)
         .with_context(|| format!("cannot read pictures folder {}", dir.display()))?;
     let mut files = HashMap::new();
