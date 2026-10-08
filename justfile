@@ -19,9 +19,9 @@ check:
     cargo clippy --all-targets -- -D warnings
     cargo test
 
-# Mirror the Drive folder into scratch/photos/<env>; rclone deletes anything else there.
+# Mirror Processed/ and Config/ of the Drive env into scratch/photos/<env>; rclone deletes anything else there.
 sync:
-    rclone sync "gdrive,root_folder_id={{folder}}:" {{photos}} --max-delete 50 --ignore-case --include "*.{jpg,jpeg,png,webp}" --include "orange-you-glad.toml" --max-size 25M
+    rclone sync "gdrive,root_folder_id={{folder}}:" {{photos}} --ignore-case --include "/Processed/*.{jpg,jpeg,png,webp}" --include "/Config/*.{json,toml}" --max-size 25M --max-delete 50 --drive-skip-gdocs --transfers 2
 
 # Point a git-ignored config at the synced folder.
 config:
