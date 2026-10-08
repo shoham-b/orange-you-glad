@@ -32,6 +32,7 @@ walkdir = "2.5.0"
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
+dhat = "0.3.3"
 tempfile = "3.27.0"
 
 [lints.rust]
@@ -72,3 +73,12 @@ harness = false
 [[bench]]
 name = "fade"
 harness = false
+
+[[bench]]
+name = "collage"
+harness = false
+
+# Generic image code is compiled in this crate, so dependency-only optimization is not enough:
+# at opt-level 0 the 12 MP decode/resize tests take half a minute.
+[profile.dev]
+opt-level = 2
