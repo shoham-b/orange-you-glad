@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use image::imageops::{self, FilterType};
+use image::metadata::Orientation;
 use image::{DynamicImage, ImageDecoder, ImageReader, Limits, Rgb, RgbImage};
 use tracing::warn;
 
@@ -39,6 +40,29 @@ pub fn build(
         filled += 1;
     }
     (canvas, filled)
+}
+
+/// Width / height of the picture as it will be shown (EXIF rotation applied), read from the file
+/// header only, so choosing a layout never needs a full decode.
+pub fn probe_aspect(path: &Path) -> Result<f64> {
+    let mut decoder = ImageReader::open(path)
+        .context("cannot open")?
+        .with_guessed_format()
+        .context("cannot read")?
+        .into_decoder()
+        .context("cannot decode")?;
+    let (w, h) = decoder.dimensions();
+    if w == 0 || h == 0 {
+        anyhow::bail!("empty picture");
+    }
+    let turned = matches!(
+        decoder.orientation().context("bad orientation")?,
+        Orientation::Rotate90
+            | Orientation::Rotate270
+            | Orientation::Rotate90FlipH
+            | Orientation::Rotate270FlipH
+    );
+    Ok(if turned { f64::from(h) / f64::from(w) } else { f64::from(w) / f64::from(h) })
 }
 
 /// Decodes `path`, applies its EXIF rotation, and crops/scales it to exactly fill `tile`.
@@ -116,6 +140,17 @@ mod tests {
         let (out, filled) = build(20, 20, [0, 0, 0], &[tile], &[bad, good]);
         assert_eq!(filled, 1);
         assert_eq!(out.get_pixel(10, 10), &Rgb([200, 10, 10]));
+    }
+
+    #[test]
+    fn probe_reads_the_shape_without_decoding() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p.png");
+        RgbImage::new(40, 30).save(&path).unwrap();
+        assert!((probe_aspect(&path).unwrap() - 4.0 / 3.0).abs() < 1e-9);
+        assert!(probe_aspect(&dir.path().join("missing.png")).is_err());
+        std::fs::write(&path, b"not an image").unwrap();
+        assert!(probe_aspect(&path).is_err());
     }
 
     #[test]

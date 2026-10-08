@@ -8,7 +8,7 @@ flowchart LR
     LIB --> L[library: pick subject and files]
     CFG[config] --> S
     L --> S[slideshow cycle driven by main]
-    S --> LY[layout: random binary splits]
+    S --> LY[layout: random splits, best fit to photo shapes]
     LY --> C[collage: decode one photo at a time, scale, place]
     C --> F[fade: blend previous and next frame]
     F --> D{{Display trait}}
@@ -16,7 +16,8 @@ flowchart LR
     D --> PNG["PNG file in dev mode"]
 ```
 
-Per slide: pick a subject, choose `tiles` images from it, compute a layout for the frame size,
+Per slide: pick a subject, choose `tiles` images from it, take their shapes from `Config/shapes.json` (or the file header), try several random layouts
+for the frame size and keep the one whose tiles best match those shapes,
 render the collage into the "next" frame, cross-fade from "previous" to "next" through the
 `Display`, then hold for `interval_secs`. "Next" becomes "previous" and the cycle repeats.
 
@@ -25,7 +26,7 @@ render the collage into the "next" frame, cross-fade from "previous" to "next" t
 | Module | Role |
 | --- | --- |
 | `config` | Parse TOML, apply defaults, validate |
-| `layout` | Pure function from (size, tiles, gap, RNG) to tile rectangles |
+| `layout` | Pure functions from (size, picture shapes, gap, RNG) to tile rectangles and a picture-to-tile assignment |
 | `library` | Read `Config/subjects.json` and resolve uuids to files in `Processed/` |
 | `hebrew` | Pure Gregorian to Hebrew date conversion |
 | `family` | Read `Config/family.json`; who has a birthday today (their subjects are then shown) |

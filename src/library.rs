@@ -28,6 +28,49 @@ pub struct Subject {
 #[derive(Debug, Deserialize)]
 struct SubjectsFile(BTreeMap<String, Vec<String>>);
 
+/// Picture shapes recorded by the intake agent, inside the library root.
+pub const SHAPES_FILE: &str = "Config/shapes.json";
+
+/// Wire format of [`SHAPES_FILE`]: `{"uuid": {"width": 4000, "height": 3000}}`, the size as the
+/// picture is meant to be shown (rotation already applied).
+#[derive(Debug, Deserialize)]
+struct ShapesFile(HashMap<String, Size>);
+
+#[derive(Debug, Deserialize)]
+struct Size {
+    width: u32,
+    height: u32,
+}
+
+/// Width / height per picture, keyed by lowercase uuid, from [`SHAPES_FILE`].
+///
+/// Lets the slideshow choose a layout without opening any photo. The file is optional: a missing
+/// one gives an empty map, and an invalid one is logged and treated the same, so pictures not
+/// listed (or all of them) simply have their shape read from the file header instead.
+pub fn load_shapes(root: &Path) -> HashMap<String, f64> {
+    let path = root.join(SHAPES_FILE);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(err) => {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                warn!("cannot read {}: {err}", path.display());
+            }
+            return HashMap::new();
+        }
+    };
+    match serde_json::from_str::<ShapesFile>(&text) {
+        Ok(ShapesFile(sizes)) => sizes
+            .into_iter()
+            .filter(|(_, s)| s.width > 0 && s.height > 0)
+            .map(|(uuid, s)| (uuid.to_ascii_lowercase(), f64::from(s.width) / f64::from(s.height)))
+            .collect(),
+        Err(err) => {
+            warn!("ignoring {}: {err}", path.display());
+            HashMap::new()
+        }
+    }
+}
+
 /// Builds the subjects listed in `<root>/Config/subjects.json` from the pictures in
 /// `<root>/Processed`. Rescanned on each cycle so newly synced pictures are picked up.
 ///
@@ -180,6 +223,29 @@ mod tests {
         let dir = library("{}", &[]);
         fs::remove_dir(dir.path().join(PROCESSED_DIR)).unwrap();
         assert!(scan(dir.path()).is_err());
+    }
+
+    #[test]
+    fn shapes_are_read_as_aspect_ratios_by_lowercase_uuid() {
+        let dir = library("{}", &[]);
+        fs::write(
+            dir.path().join(SHAPES_FILE),
+            r#"{"AB": {"width": 400, "height": 300}, "zero": {"width": 0, "height": 5}}"#,
+        )
+        .unwrap();
+
+        let shapes = load_shapes(dir.path());
+
+        assert_eq!(shapes.len(), 1);
+        assert!((shapes["ab"] - 4.0 / 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn missing_or_invalid_shapes_file_means_no_shapes() {
+        let dir = library("{}", &[]);
+        assert!(load_shapes(dir.path()).is_empty());
+        fs::write(dir.path().join(SHAPES_FILE), "{ nope").unwrap();
+        assert!(load_shapes(dir.path()).is_empty());
     }
 
     #[test]

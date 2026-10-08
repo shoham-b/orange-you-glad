@@ -28,7 +28,7 @@ well-known maintained crates.
 | Module | Responsibility |
 | --- | --- |
 | `config` | TOML config (`/etc/orange-you-glad.toml`), defaults and validation |
-| `layout` | Pure geometry: random splits of a random tile into varied-size rectangles |
+| `layout` | Pure geometry: random splits into varied-size rectangles, best of N fitted to the photos' aspect ratios |
 | `library` | Resolve subjects (uuid lists) to image files, pick a subject |
 | `hebrew` | Pure Gregorian to Hebrew date conversion |
 | `family` | `Config/family.json`: Hebrew birthdays; which people celebrate today |
@@ -49,7 +49,13 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 cargo bench                      # criterion benchmarks in benches/
 cargo run -- --config config.local.toml --output out.png --size 1920x1080 --once
+just check                       # fmt --check, clippy, tests
+just integration                 # sync the Drive development copy, run tests/drive_integration.rs
+just render                      # sync Drive (development copy) with rclone, render out.png
+just env=production run          # same, against the production Drive copy
 ```
+
+The `justfile` needs `just` and rclone (`rclone config create gdrive drive scope=drive.readonly`).
 
 `*.local.toml` and scratch images are git-ignored. On Windows, long paths break some build
 scripts; use a short target dir, for example `CARGO_TARGET_DIR=/c/t/oyg` (bash) or

@@ -10,7 +10,8 @@ folder, and draws straight to the Linux framebuffer. No X server, no desktop.
   `Processed/`); one subject is picked per collage.
 - Birthdays: `Config/family.json` gives family members a Hebrew birthday; on that
   day the collages show only the subject named after them.
-- Collages with varied tile sizes, built by random binary splits of the screen.
+- Collages with varied tile sizes, built by random binary splits of the screen. Several layouts are
+  tried per collage and the one whose tiles best match the photos' shapes wins, so little is cropped.
 - Smooth cross-fade from the previous collage to the next.
 - Writes directly to `/dev/fb0`, or to a PNG file in dev mode.
 - Low memory: one photo decoded at a time, frame buffers reused.
