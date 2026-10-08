@@ -111,16 +111,25 @@ mod tests {
         .unwrap()
     }
 
-    fn photo(dir: &Path, subject: &str, color: [u8; 3]) {
-        let folder = dir.join(subject);
-        std::fs::create_dir_all(&folder).unwrap();
-        RgbImage::from_pixel(32, 32, Rgb(color)).save(folder.join("a.png")).unwrap();
+    /// A picture named `<name>.png` in `Processed`.
+    fn photo(dir: &Path, name: &str, color: [u8; 3]) {
+        let processed = dir.join("Processed");
+        std::fs::create_dir_all(&processed).unwrap();
+        RgbImage::from_pixel(32, 32, Rgb(color))
+            .save(processed.join(format!("{name}.png")))
+            .unwrap();
+    }
+
+    fn list_subjects(dir: &Path, json: &str) {
+        std::fs::create_dir_all(dir.join("Config")).unwrap();
+        std::fs::write(dir.join("Config/subjects.json"), json).unwrap();
     }
 
     #[test]
     fn shows_a_collage_and_remembers_the_subject() {
         let dir = tempfile::tempdir().unwrap();
         photo(dir.path(), "red", [250, 0, 0]);
+        list_subjects(dir.path(), r#"{"red": ["red"]}"#);
         let mut display = Recorder { size: (16, 16), frames: Vec::new() };
         let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
 
@@ -135,6 +144,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         photo(dir.path(), "red", [250, 0, 0]);
         photo(dir.path(), "blue", [0, 0, 250]);
+        list_subjects(dir.path(), r#"{"red": ["red"], "blue": ["blue"]}"#);
         let mut display = Recorder { size: (16, 16), frames: Vec::new() };
         let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
 
@@ -150,7 +160,8 @@ mod tests {
     fn unreadable_picture_means_fewer_tiles_not_a_hole() {
         let dir = tempfile::tempdir().unwrap();
         photo(dir.path(), "red", [250, 0, 0]);
-        std::fs::write(dir.path().join("red").join("bad.png"), b"not an image").unwrap();
+        std::fs::write(dir.path().join("Processed/bad.png"), b"not an image").unwrap();
+        list_subjects(dir.path(), r#"{"red": ["red", "bad"]}"#);
         let mut display = Recorder { size: (16, 16), frames: Vec::new() };
         let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
 
@@ -163,6 +174,8 @@ mod tests {
     #[test]
     fn empty_library_is_an_error_and_leaves_the_show_unchanged() {
         let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("Processed")).unwrap();
+        list_subjects(dir.path(), "{}");
         let mut display = Recorder { size: (16, 16), frames: Vec::new() };
         let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
 
