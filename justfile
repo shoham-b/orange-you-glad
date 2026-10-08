@@ -1,5 +1,7 @@
-# Drive-backed development. One-time setup: rclone config create gdrive drive scope=drive.readonly
+# Drive-backed development. One-time setup: copy .env.example to .env, point it at the service-account key, run `just drive-auth`.
 # Pick the Drive copy with `just env=production render`; the default is development.
+
+set dotenv-load
 
 set windows-shell := ["powershell.exe", "-NoProfile", "-Command"]
 
@@ -19,6 +21,10 @@ check:
     cargo fmt --all --check
     cargo clippy --all-targets -- -D warnings
     cargo test
+
+# One-time: create the rclone `gdrive` remote from the service-account key named in .env (no browser).
+drive-auth:
+    rclone config create gdrive drive service_account_file=$env:GDRIVE_SERVICE_ACCOUNT_FILE scope=drive.readonly
 
 # Mirror Processed/ and Config/ of the Drive env into scratch/photos/<env>; rclone deletes anything else there.
 sync:

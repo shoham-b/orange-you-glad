@@ -198,7 +198,7 @@ journal, and again when it recovers.
 The Drive folder "Orange You Glad" has two copies of the same layout, `production` (the real show;
 point the Pi's `root_folder_id` at it) and `development` (fixtures for integration tests, with a
 short interval). Each holds `Incoming/`, `Processed/`, `Errored/` and `Config/`. On a dev machine,
-after the one-time `rclone config create gdrive drive scope=drive.readonly`:
+after the one-time setup (copy `.env.example` to the git-ignored `.env`, point it at the service-account key, run `just drive-auth`):
 
 ```sh
 just render                      # sync development, write config.development.local.toml, render out.png
