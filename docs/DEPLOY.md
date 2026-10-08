@@ -131,9 +131,10 @@ uuid lists, for example `{"dog": ["<uuid>", "<uuid>"], "ski": ["<uuid>"]}`. A uu
 under several subjects.
 
 `Config/family.json` lists family members with their Hebrew birthday and pictures, for example
-`{"Dana": {"birthday": "15 Shevat", "pictures": ["<uuid>"]}}`. Months are Nisan, Iyar, Sivan,
-Tamuz, Av, Elul, Tishrei, Cheshvan, Kislev, Tevet, Shevat, Adar, Adar I, Adar II (plain `Adar` is
-Adar II in a leap year). A 30 Cheshvan or 30 Kislev birthday is kept on the 29th in years when the
+`{"Dana": {"birthday": "15/5", "pictures": ["<uuid>"]}}`. A birthday is `day/month` with months
+counted from Tishrei = 1: Cheshvan 2, Kislev 3, Tevet 4, Shevat 5, Adar 6, Nisan 8, Iyar 9, Sivan
+10, Tamuz 11, Av 12, Elul 13 (so `15/5` is 15 Shevat; 7 also means Adar, and in a leap year Adar is
+Adar II). A 30 Cheshvan or 30 Kislev birthday is kept on the 29th in years when the
 month is short. On that Hebrew date (by the board's local date, so set its timezone) only the
 birthday person's pictures are shown. A missing file means no birthdays; an invalid one is logged
 and ignored.

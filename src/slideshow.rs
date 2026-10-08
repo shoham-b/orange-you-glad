@@ -214,7 +214,7 @@ mod tests {
         list_subjects(dir.path(), r#"{"blue": ["blue"]}"#);
         std::fs::write(
             dir.path().join("Config/family.json"),
-            r#"{"Dana": {"birthday": "27 Tishrei", "pictures": ["red"]}}"#,
+            r#"{"Dana": {"birthday": "27/1", "pictures": ["red"]}}"#,
         )
         .unwrap();
         let mut display = Recorder { size: (16, 16), frames: Vec::new() };

@@ -13,7 +13,7 @@ use crate::library::{self, PROCESSED_DIR, Subject};
 /// Family file inside the library root, next to `subjects.json`.
 pub const FAMILY_FILE: &str = "Config/family.json";
 
-/// Wire format: `{"Dana": {"birthday": "15 Shevat", "pictures": ["uuid", ...]}}`. `pictures` are
+/// Wire format: `{"Dana": {"birthday": "15/5", "pictures": ["uuid", ...]}}`. `pictures` are
 /// uuids of files in `Processed`, like in `subjects.json`.
 #[derive(Debug, Deserialize)]
 struct FamilyFile(BTreeMap<String, Person>);
@@ -26,22 +26,14 @@ struct Person {
     pictures: Vec<String>,
 }
 
-/// Which month of the Hebrew year a birthday falls in. Adar needs care in leap years.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Month {
-    Fixed(u8),
-    /// Plain "Adar": Adar II in a leap year, the only Adar otherwise.
-    Adar,
-    AdarI,
-    AdarII,
-}
-
-/// A birthday as day and month of the Hebrew calendar, written like `"15 Shevat"`.
+/// A birthday as day and month of the Hebrew calendar, written `"day/month"` with the months
+/// counted from Tishrei = 1: Cheshvan 2, Kislev 3, Tevet 4, Shevat 5, Adar 6 (7 also means Adar,
+/// as Adar II), Nisan 8, Iyar 9, Sivan 10, Tamuz 11, Av 12, Elul 13. So `"15/5"` is 15 Shevat.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(try_from = "String")]
 pub struct Birthday {
     day: u8,
-    month: Month,
+    month: u8,
 }
 
 impl TryFrom<String> for Birthday {
@@ -56,55 +48,33 @@ impl FromStr for Birthday {
 
     fn from_str(text: &str) -> Result<Self> {
         let (day, month) = text
-            .trim()
-            .split_once(char::is_whitespace)
-            .with_context(|| format!("birthday '{text}' should look like '15 Shevat'"))?;
-        let day: u8 =
-            day.parse().with_context(|| format!("'{day}' is not a day number in '{text}'"))?;
+            .split_once('/')
+            .with_context(|| format!("birthday '{text}' should look like '15/5' (day/month)"))?;
+        let number = |part: &str, what: &str| -> Result<u8> {
+            part.trim().parse().with_context(|| format!("'{part}' is not a {what} in '{text}'"))
+        };
+        let (day, month) = (number(day, "day")?, number(month, "month")?);
         if !(1..=30).contains(&day) {
             bail!("day {day} in '{text}' must be between 1 and 30");
         }
-        let month = parse_month(month)
-            .with_context(|| format!("unknown Hebrew month '{}' in '{text}'", month.trim()))?;
+        if !(1..=13).contains(&month) {
+            bail!("month {month} in '{text}' must be between 1 (Tishrei) and 13 (Elul)");
+        }
         Ok(Self { day, month })
     }
-}
-
-fn parse_month(name: &str) -> Option<Month> {
-    let key: String =
-        name.chars().filter(|c| c.is_alphanumeric()).collect::<String>().to_ascii_lowercase();
-    let fixed = match key.as_str() {
-        "nisan" | "nissan" => 1,
-        "iyar" | "iyyar" => 2,
-        "sivan" => 3,
-        "tamuz" | "tammuz" => 4,
-        "av" | "menachemav" => 5,
-        "elul" => 6,
-        "tishrei" | "tishri" | "tishrey" => 7,
-        "cheshvan" | "heshvan" | "marcheshvan" => 8,
-        "kislev" => 9,
-        "tevet" | "teves" => 10,
-        "shevat" | "shvat" => 11,
-        "adar" => return Some(Month::Adar),
-        "adar1" | "adari" | "adaralef" => return Some(Month::AdarI),
-        "adar2" | "adarii" | "adarbet" => return Some(Month::AdarII),
-        _ => return None,
-    };
-    Some(Month::Fixed(fixed))
 }
 
 impl Birthday {
     /// Whether `today` is this birthday.
     ///
     /// A 30th that the year's month lacks (Cheshvan or Kislev) is kept on the month's last day.
-    /// Adar I and II birthdays move to the only Adar in an ordinary year.
+    /// An Adar birthday is in Adar II in a leap year.
     pub fn falls_on(self, today: HebrewDate) -> bool {
-        let leap = hebrew::is_leap_year(today.year);
         let month = match self.month {
-            Month::Fixed(m) => m,
-            Month::Adar | Month::AdarII if leap => ADAR_II,
-            Month::AdarI if leap => ADAR,
-            Month::Adar | Month::AdarI | Month::AdarII => ADAR,
+            m @ 1..=5 => m + 6,
+            6 | 7 if hebrew::is_leap_year(today.year) => ADAR_II,
+            6 | 7 => ADAR,
+            m => m - 7,
         };
         month == today.month && self.day.min(hebrew::days_in_month(today.year, month)) == today.day
     }
@@ -153,36 +123,40 @@ mod tests {
     }
 
     #[test]
-    fn parses_names_spellings_and_rejects_nonsense() {
-        assert_eq!(bday("15 Shevat"), bday(" 15  shvat "));
-        assert_eq!(bday("1 Tishrei").month, Month::Fixed(TISHREI));
-        assert_eq!(bday("14 Adar II").month, Month::AdarII);
-        assert_eq!(bday("14 Adar I").month, Month::AdarI);
-        for bad in ["Shevat", "0 Shevat", "31 Shevat", "x Shevat", "15 January", ""] {
+    fn parses_day_slash_month_and_rejects_nonsense() {
+        assert_eq!(bday("15/5"), bday(" 15 / 5 "));
+        assert_eq!(bday("1/1").month, 1);
+        for bad in ["5", "0/5", "31/5", "15/0", "15/14", "x/5", "15 Shevat", ""] {
             assert!(bad.parse::<Birthday>().is_err(), "{bad}");
         }
     }
 
     #[test]
+    fn month_numbers_count_from_tishrei() {
+        assert!(bday("27/1").falls_on(on(5787, TISHREI, 27)));
+        assert!(bday("15/5").falls_on(on(5786, 11, 15))); // Shevat
+        assert!(bday("1/8").falls_on(on(5786, 1, 1))); // Nisan
+        assert!(bday("29/13").falls_on(on(5786, 6, 29))); // Elul
+    }
+
+    #[test]
     fn adar_birthdays_follow_leap_years() {
         let (leap, plain) = (5784, 5785);
-        assert!(bday("14 Adar").falls_on(on(leap, ADAR_II, 14)));
-        assert!(!bday("14 Adar").falls_on(on(leap, ADAR, 14)));
-        assert!(bday("14 Adar").falls_on(on(plain, ADAR, 14)));
-        assert!(bday("14 Adar I").falls_on(on(leap, ADAR, 14)));
-        assert!(bday("14 Adar I").falls_on(on(plain, ADAR, 14)));
-        assert!(bday("14 Adar II").falls_on(on(leap, ADAR_II, 14)));
-        assert!(bday("14 Adar II").falls_on(on(plain, ADAR, 14)));
+        for text in ["14/6", "14/7"] {
+            assert!(bday(text).falls_on(on(leap, ADAR_II, 14)));
+            assert!(!bday(text).falls_on(on(leap, ADAR, 14)));
+            assert!(bday(text).falls_on(on(plain, ADAR, 14)));
+        }
     }
 
     #[test]
     fn thirtieth_of_a_short_month_moves_to_its_last_day() {
         let short = (5780..5800).find(|&y| hebrew::days_in_month(y, CHESHVAN) == 29).unwrap();
         let long = (5780..5800).find(|&y| hebrew::days_in_month(y, CHESHVAN) == 30).unwrap();
-        assert!(bday("30 Cheshvan").falls_on(on(short, CHESHVAN, 29)));
-        assert!(!bday("30 Cheshvan").falls_on(on(short, CHESHVAN, 28)));
-        assert!(bday("30 Cheshvan").falls_on(on(long, CHESHVAN, 30)));
-        assert!(!bday("30 Cheshvan").falls_on(on(long, CHESHVAN, 29)));
+        assert!(bday("30/2").falls_on(on(short, CHESHVAN, 29)));
+        assert!(!bday("30/2").falls_on(on(short, CHESHVAN, 28)));
+        assert!(bday("30/2").falls_on(on(long, CHESHVAN, 30)));
+        assert!(!bday("30/2").falls_on(on(long, CHESHVAN, 29)));
     }
 
     fn library(family: Option<&str>, files: &[&str]) -> tempfile::TempDir {
@@ -199,9 +173,9 @@ mod tests {
     }
 
     const FAMILY: &str = r#"{
-        "Dana": {"birthday": "15 Shevat", "pictures": ["d1", "d2", "later"]},
-        "Omer": {"birthday": "15 Shevat"},
-        "Noa": {"birthday": "1 Nisan", "pictures": ["n1"]}
+        "Dana": {"birthday": "15/5", "pictures": ["d1", "d2", "later"]},
+        "Omer": {"birthday": "15/5"},
+        "Noa": {"birthday": "1/8", "pictures": ["n1"]}
     }"#;
 
     #[test]
