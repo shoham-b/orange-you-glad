@@ -28,6 +28,8 @@ render the collage into the "next" frame, cross-fade from "previous" to "next" t
 | `config` | Parse TOML, apply defaults, validate |
 | `layout` | Pure functions from (size, picture shapes, gap, RNG) to tile rectangles and a picture-to-tile assignment |
 | `library` | Read `Config/subjects.json` and resolve uuids to files in `Processed/` |
+| `hebrew` | Pure Gregorian to Hebrew date conversion |
+| `family` | Read `Config/family.json`; who has a birthday today (their subjects are then shown) |
 | `collage` | Decode, scale and place photos into a frame |
 | `display` | `Display` trait; framebuffer and PNG implementations |
 | `fade` | Blend two frames into a scratch frame, push each step to a `Display` |
