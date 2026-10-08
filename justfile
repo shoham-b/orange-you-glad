@@ -36,6 +36,16 @@ render: sync config
 run: sync config
     cargo run --release -- --config {{config}} --output out.png
 
+# Sync, then keep running in a desktop window (Esc or close to quit).
+window: sync config
+    cargo run --release --features window -- --config {{config}} --window
+
+# Window preview of a generated library (60 mixed-shape pictures), no Drive needed.
+window-sample:
+    cargo run --example sample_library -- scratch/photos/sample
+    @echo 'library_root = "{{root}}/scratch/photos/sample"' | Out-File -Encoding ascii config.sample.local.toml
+    cargo run --release --features window -- --config config.sample.local.toml --window
+
 # Sync the development Drive copy, then run the ignored tests in tests/drive_integration.rs.
 integration: sync
     cargo test --test drive_integration -- --ignored

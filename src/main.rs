@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -7,7 +6,7 @@ use clap::Parser;
 use tracing::{info, warn};
 
 use orange_you_glad::config::Config;
-use orange_you_glad::display::{Display, FileDisplay, Framebuffer};
+use orange_you_glad::display::{Display, DisplayError, FileDisplay, Framebuffer};
 use orange_you_glad::pacing::{RETRY_SECS, next_sleep};
 use orange_you_glad::slideshow::Slideshow;
 
@@ -20,7 +19,10 @@ struct Args {
     /// Develop without a TV: save frames to this image file instead of the framebuffer.
     #[arg(long, value_name = "FILE")]
     output: Option<PathBuf>,
-    /// Canvas size for `--output`, as `WIDTHxHEIGHT`.
+    /// Preview in a desktop window instead of the framebuffer (needs `--features window`).
+    #[arg(long, conflicts_with = "output")]
+    window: bool,
+    /// Canvas size for `--output` and `--window`, as `WIDTHxHEIGHT`.
     #[arg(long, default_value = "1920x1080", value_parser = parse_size)]
     size: (u32, u32),
     /// Show one collage and exit.
@@ -48,6 +50,7 @@ fn main() -> Result<()> {
     let config = Config::load(&args.config)?;
     let mut display: Box<dyn Display> = match args.output {
         Some(path) => Box::new(FileDisplay::new(path, args.size)),
+        None if args.window => open_window(args.size)?,
         None => Box::new(Framebuffer::open(&config.framebuffer)?),
     };
 
@@ -58,6 +61,9 @@ fn main() -> Result<()> {
     loop {
         refresh(&config, &mut current, &mut settings_error);
         let shown = slideshow.show_next(&current, display.as_mut());
+        if shown.as_ref().is_err_and(is_window_closed) {
+            return Ok(());
+        }
         let failed = shown.is_err();
         log_change(&mut cycle_error, shown.err().map(|e| format!("{e:#}")), "collage");
         if args.once {
@@ -65,7 +71,9 @@ fn main() -> Result<()> {
         }
         if failed {
             // Nothing is on screen yet (e.g. nothing synced); retry soon instead of waiting.
-            thread::sleep(Duration::from_secs(RETRY_SECS));
+            if display.idle(Duration::from_secs(RETRY_SECS)).is_err() {
+                return Ok(());
+            }
             continue;
         }
         let shown_at = Instant::now();
@@ -74,10 +82,26 @@ fn main() -> Result<()> {
             Duration::from_secs(current.interval_secs),
             settings_error.is_none(),
         ) {
-            thread::sleep(nap);
+            if display.idle(nap).is_err() {
+                return Ok(());
+            }
             refresh(&config, &mut current, &mut settings_error);
         }
     }
+}
+
+fn is_window_closed(err: &anyhow::Error) -> bool {
+    matches!(err.downcast_ref::<DisplayError>(), Some(DisplayError::WindowClosed))
+}
+
+#[cfg(feature = "window")]
+fn open_window(size: (u32, u32)) -> Result<Box<dyn Display>> {
+    Ok(Box::new(orange_you_glad::display::WindowDisplay::open(size)?))
+}
+
+#[cfg(not(feature = "window"))]
+fn open_window(_size: (u32, u32)) -> Result<Box<dyn Display>> {
+    anyhow::bail!("--window needs a build with `--features window`")
 }
 
 /// Re-reads the Drive settings. On failure the last good settings stay in force.
