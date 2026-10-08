@@ -10,11 +10,13 @@ User=orange-you-glad
 Group=orange-you-glad
 Environment=RCLONE_CONFIG=/var/lib/orange-you-glad/rclone.conf
 # The remote "gdrive" must already be configured (see docs/DEPLOY.md). Its root_folder_id
-# points at the shared folder, so the remote root is the library root.
+# points at the shared folder, so the remote root holds Incoming/, Processed/, Errored/ and
+# Config/. Only Processed/ and Config/ are mirrored; the other two belong to the intake agent.
 ExecStart=/usr/bin/rclone sync gdrive: /var/lib/orange-you-glad/photos \
   --ignore-case \
-  --include "*.{jpg,jpeg,png,webp}" \
-  --include "orange-you-glad.toml" \
+  --include "/Processed/*.{jpg,jpeg,png,webp}" \
+  --include "/Config/*.{json,toml}" \
+  --include "/orange-you-glad.toml" \
   --max-size 25M \
   --max-delete 50 \
   --drive-skip-gdocs \
