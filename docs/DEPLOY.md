@@ -70,23 +70,56 @@ sudoedit /etc/orange-you-glad.toml   # uncomment library_root and any other keys
 Install rclone (`sudo apt install rclone`; the packaged version may be old, so consider the
 official install script from rclone.org if the options below are rejected).
 
-The board has no browser, so authorize on another machine that has rclone and a browser:
+The board needs a clock that is right at boot (it has no RTC), or Google rejects its tokens and
+TLS fails. Check `timedatectl` shows `System clock synchronized: yes`; enable `systemd-timesyncd`
+or `chrony` if not.
+
+Find the shared folder's ID in its Google Drive URL
+(`https://drive.google.com/drive/folders/<FOLDER_ID>`), then pick one way to authenticate.
+
+### Option A: service account (recommended)
+
+Nothing expires and nobody has to sign in again.
+
+1. In Google Cloud Console, create a project, enable the Google Drive API, create a service
+   account and download a JSON key.
+2. Share the Drive folder with the service account's email address as Viewer.
+3. Copy the key to the board and lock it down:
 
 ```sh
-rclone authorize "drive" "scope=drive.readonly"
+sudo install -m 0600 -o orange-you-glad -g orange-you-glad key.json \
+  /var/lib/orange-you-glad/service-account.json
 ```
 
-Sign in, approve, and copy the JSON token it prints. Find the shared folder's ID in its Google
-Drive URL (`https://drive.google.com/drive/folders/<FOLDER_ID>`). Then on the board, as the
-service user:
+4. As the service user, run `rclone config`: new remote `gdrive`, type `drive`, scope
+   `drive.readonly`, `service_account_file` set to the path above, `root_folder_id` set to the
+   folder ID, no auto config.
 
 ```sh
 sudo -u orange-you-glad env RCLONE_CONFIG=/var/lib/orange-you-glad/rclone.conf rclone config
 ```
 
-Choose a new remote named `gdrive`, type `drive`, leave client id and secret blank, scope
-`drive.readonly` (read-only access), set `root_folder_id` to the folder ID, answer "no" to
-auto config, and paste the token. Then restrict the file:
+Never commit the key. The repository ignores `*.sa.json` and `secrets/`; keep it outside the
+checkout anyway.
+
+### Option B: OAuth token authorized on another machine
+
+The board has no browser, so create the remote on a machine that has rclone and a browser:
+
+1. Create your own OAuth client ID in Google Cloud Console (type "Desktop app") and use it when
+   `rclone config` asks for client id and secret. rclone's shared client is heavily rate limited.
+2. Choose scope `drive.readonly`, set `root_folder_id` to the folder ID, and sign in. The scope
+   is fixed when you consent, so choose it before signing in.
+3. Copy the resulting `[gdrive]` section from that machine's `rclone config file` into
+   `/var/lib/orange-you-glad/rclone.conf` on the board.
+
+Warning: an OAuth consent screen left in "Testing" status makes refresh tokens expire after
+7 days, and the sync then fails silently. Set the app to "In production" (fine for personal use)
+or use Option A.
+
+### Both options
+
+Restrict the config file, which also holds the token that rclone refreshes:
 
 ```sh
 sudo chmod 600 /var/lib/orange-you-glad/rclone.conf
@@ -100,15 +133,18 @@ Test a dry run:
 
 ```sh
 sudo -u orange-you-glad env RCLONE_CONFIG=/var/lib/orange-you-glad/rclone.conf \
-  rclone sync gdrive: /var/lib/orange-you-glad/photos --dry-run \
+  rclone sync gdrive: /var/lib/orange-you-glad/photos --dry-run --max-delete 50 \
   --ignore-case --include "*.{jpg,jpeg,png,webp}" --include "orange-you-glad.toml" --max-size 25M
 ```
 
 The extra `--include` lets the optional settings file through (see "Settings from Drive" below).
-Add it to the sync service unit's command too.
+Keep it in step with the sync service unit's command.
 
 Note that `rclone sync` makes the destination match the source, deleting local files that are no
-longer in Drive. Never point it at a directory holding anything else.
+longer in Drive. Never point it at a directory holding anything else. `--max-delete 50` aborts a
+run that would delete more than 50 files, which protects the library when the folder ID is wrong,
+access is revoked or Drive lists empty by mistake. Raise it if you legitimately remove many
+photos at once.
 
 ## 7. Install the systemd units
 
@@ -143,7 +179,8 @@ the journal.
 | Screen blanks after a few minutes | `consoleblank=0` missing from `/proc/cmdline` |
 | Garbled or shifted image | Resolution or stride mismatch; recheck `virtual_size`, `stride`, `bits_per_pixel` |
 | No photos shown | `library_root` wrong, or no subfolders containing `.jpg`, `.jpeg`, `.png` or `.webp` files; run with `RUST_LOG=debug` |
-| Sync fails with auth errors | Token expired or wrong scope; redo `rclone authorize` and `rclone config reconnect gdrive:` |
+| Sync fails with auth errors | Wrong system clock (`timedatectl`); expired token (an OAuth app in "Testing" status expires after 7 days: run `rclone config reconnect gdrive:` or switch to a service account); wrong scope |
+| Sync aborts with a max-delete error | Drive listed far fewer files than expected; check `root_folder_id` and that the folder is still shared, then raise `--max-delete` if the removal was intended |
 | Sync copies nothing | Wrong `root_folder_id`, or the folder is not shared with the authorizing account |
 | Out-of-memory kills | Check `journalctl -k`; reduce `tiles`; lower `--max-size`; confirm swap or zram |
 | Blinking cursor visible | `vt.global_cursor_default=0` missing from the kernel arguments |
