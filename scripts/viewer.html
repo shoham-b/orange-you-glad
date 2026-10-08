@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Orange You Glad preview</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; }
+  img { width: 100vw; height: 100vh; object-fit: contain; display: block; }
+</style>
+<img id="screen" alt="">
+<script>
+  // The app rewrites the PNG on every fade step; keep the last good frame if a read catches it mid-write.
+  const img = document.getElementById("screen");
+  function tick() {
+    const next = new Image();
+    next.onload = () => { img.src = next.src; setTimeout(tick, 100); };
+    next.onerror = () => setTimeout(tick, 200);
+    next.src = "../.preview/screen.png?" + Date.now();
+  }
+  tick();
+</script>
