@@ -23,7 +23,7 @@ if (-not $SkipSync) {
         throw "rclone not found. Install it (winget install Rclone.Rclone) and configure a 'gdrive' remote."
     }
     rclone sync $Remote $photos --ignore-case --include "/Processed/*.{jpg,jpeg,png,webp}" `
-        --include "/Config/*.{json,toml}" --include "/orange-you-glad.toml"--max-size 25M --drive-skip-gdocs --transfers 2 --log-level INFO
+        --include "/Config/*.{json,toml}" --max-size 25M --drive-skip-gdocs --transfers 2 --log-level INFO
     if ($LASTEXITCODE -ne 0) { throw "rclone sync failed" }
 }
 
