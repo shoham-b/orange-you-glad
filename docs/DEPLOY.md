@@ -101,8 +101,11 @@ Test a dry run:
 ```sh
 sudo -u orange-you-glad env RCLONE_CONFIG=/var/lib/orange-you-glad/rclone.conf \
   rclone sync gdrive: /var/lib/orange-you-glad/photos --dry-run \
-  --ignore-case --include "*.{jpg,jpeg,png,webp}" --max-size 25M
+  --ignore-case --include "*.{jpg,jpeg,png,webp}" --include "orange-you-glad.toml" --max-size 25M
 ```
+
+The extra `--include` lets the optional settings file through (see "Settings from Drive" below).
+Add it to the sync service unit's command too.
 
 Note that `rclone sync` makes the destination match the source, deleting local files that are no
 longer in Drive. Never point it at a directory holding anything else.
@@ -121,6 +124,15 @@ sudo systemctl enable --now orange-you-glad.service
 The slideshow unit runs as the service user with `SupplementaryGroups=video`, restarts always,
 and applies sandboxing options. If it fails to start after a hardening change, relax options one
 at a time while reading `journalctl -u orange-you-glad`.
+
+## Settings from Drive
+
+Put a file named `orange-you-glad.toml` in the top level of the shared Drive folder. After the
+next sync the slideshow applies it at the start of the next cycle, no restart needed. It may set
+`interval_secs`, `tiles`, `gap_px`, `fade_ms` and `background` (same meaning as in
+`/etc/orange-you-glad.toml`); unset keys keep the local values. `library_root` and `framebuffer`
+cannot be changed this way. A file with a typo or an invalid value is ignored with a warning in
+the journal.
 
 ## Troubleshooting
 
