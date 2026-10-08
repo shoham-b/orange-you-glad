@@ -134,11 +134,13 @@ Test a dry run:
 ```sh
 sudo -u orange-you-glad env RCLONE_CONFIG=/var/lib/orange-you-glad/rclone.conf \
   rclone sync gdrive: /var/lib/orange-you-glad/photos --dry-run --max-delete 50 \
-  --ignore-case --include "*.{jpg,jpeg,png,webp}" --include "orange-you-glad.toml" --max-size 25M
+  --ignore-case --include "/Processed/*.{jpg,jpeg,png,webp}" --include "/Config/*.{json,toml}" \
+  --include "/orange-you-glad.toml" --max-size 25M
 ```
 
-The extra `--include` lets the optional settings file through (see "Settings from Drive" below).
-Keep it in step with the sync service unit's command.
+The Drive folder holds `Incoming/`, `Processed/`, `Errored/` and `Config/`. The `--include` rules
+mirror only `Processed/` and `Config/`; `Incoming/` and `Errored/` belong to the intake agent and
+are never downloaded. Keep these rules in step with the sync service unit's command.
 
 Note that `rclone sync` makes the destination match the source, deleting local files that are no
 longer in Drive. Never point it at a directory holding anything else. `--max-delete 50` aborts a
