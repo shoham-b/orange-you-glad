@@ -12,6 +12,7 @@ $RemoteName = if ($env:OYG_INTAKE_REMOTE) { $env:OYG_INTAKE_REMOTE } else { 'gdr
 $Remote = "$RemoteName,root_folder_id=${Folder}:"
 $Work = Join-Path $PSScriptRoot '..\scratch\intake'
 $PreviewPx = 768
+$MaxBytes = 25MB
 # Caps model spend per night (about 1k tokens per picture); the rest wait in Incoming/ for later runs.
 $MaxPerRun = if ($env:OYG_INTAKE_MAX) { [int]$env:OYG_INTAKE_MAX } else { 60 }
 $Exts = 'jpg', 'jpeg', 'png', 'webp'
@@ -34,7 +35,8 @@ function New-Preview($src, $dst) {
 if ($Step -eq 'prepare') {
     if (Test-Path $Work) { Remove-Item $Work -Recurse -Force }
     New-Item -ItemType Directory "$Work\orig", "$Work\preview" | Out-Null
-    $names = @(Rc lsf "${Remote}Incoming" --files-only | Where-Object { $Exts -contains ($_.Split('.')[-1].ToLower()) })
+    $listing = Rc lsjson "${Remote}Incoming" --files-only | Out-String | ConvertFrom-Json
+    $names = @($listing | Where-Object { $_.Size -le $MaxBytes -and $Exts -contains $_.Name.Split(".")[-1].ToLower() } | ForEach-Object Name)
     if ($names.Count -eq 0) { 'NONE'; exit 0 }
     $left = [Math]::Max(0, $names.Count - $MaxPerRun)
     $names = @($names | Select-Object -First $MaxPerRun)
@@ -44,7 +46,7 @@ if ($Step -eq 'prepare') {
     foreach ($n in $names) {
         $id = [guid]::NewGuid().ToString()
         $ext = $n.Split('.')[-1].ToLower()
-        Rc copyto "${Remote}Incoming/$n" "$Work\orig\$id.$ext" --max-size 25M
+        Rc copyto "${Remote}Incoming/$n" "$Work\orig\$id.$ext"
         try { New-Preview "$Work\orig\$id.$ext" "$Work\preview\$id.jpg" } catch { Write-Warning "unreadable $n"; continue }
         $manifest += [pscustomobject]@{ uuid = $id; name = $n; ext = $ext }
     }
