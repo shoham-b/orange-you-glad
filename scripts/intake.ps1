@@ -2,8 +2,8 @@
 # Code does the I/O; a model (Haiku) only looks at the small previews and writes labels.json.
 #   intake.ps1 prepare   download + preview new pictures, print what to label (prints NONE when idle)
 #   intake.ps1 apply     move labelled pictures to Processed/, unlabelled to Errored/, merge subjects.json
-# Needs a write-scoped remote: rclone config create gdrive-rw drive service_account_file=<key> scope=drive
-# and the Drive folder shared with the service account as Editor.
+# Needs the write-scoped remote from `just drive-auth-writer` (service account orange-writer@static-pottery-465109-b6.iam.gserviceaccount.com)
+# and the Drive folder shared with it as Editor.
 param([Parameter(Mandatory)][ValidateSet('prepare', 'apply')][string]$Step)
 
 $ErrorActionPreference = 'Stop'
