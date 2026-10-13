@@ -234,4 +234,4 @@ Claude task (Haiku) writes `scratch/intake/labels.json`, and `apply` moves pictu
 `Processed/<uuid>.<ext>` (unlabelled ones to `Errored/`) and merges `Config/subjects.json`. At most
 `OYG_INTAKE_MAX` pictures (default 60) are handled per run to bound token spend; the rest wait in
 `Incoming/`. It needs a write-scoped rclone remote, `gdrive-rw`, using the Editor service account
-`orange-writer@static-pottery-465109-b6.iam.gserviceaccount.com` (`just drive-auth-writer`):
+`orange-writer@static-pottery-465109-b6.iam.gserviceaccount.com` (`just drive-auth-writer`). The Pi's service account stays read-only.
