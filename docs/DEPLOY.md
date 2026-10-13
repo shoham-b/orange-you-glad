@@ -226,3 +226,12 @@ its tests are `#[ignore]`d so plain `cargo test` and CI do not need Drive.
 | Sync copies nothing | Wrong `root_folder_id`, or the folder is not shared with the authorizing account |
 | Out-of-memory kills | Check `journalctl -k`; reduce `tiles`; lower `--max-size`; confirm swap or zram |
 | Blinking cursor visible | `vt.global_cursor_default=0` missing from the kernel arguments |
+
+## Nightly intake from Drive
+
+`scripts/intake.ps1` files new pictures: `prepare` downloads previews of `Incoming/`, a scheduled
+Claude task (Haiku) writes `scratch/intake/labels.json`, and `apply` moves pictures to
+`Processed/<uuid>.<ext>` (unlabelled ones to `Errored/`) and merges `Config/subjects.json`. At most
+`OYG_INTAKE_MAX` pictures (default 60) are handled per run to bound token spend; the rest wait in
+`Incoming/`. It needs a write-scoped rclone remote signed in as an Editor of the Drive folder:
+`rclone config create gdrive-rw drive scope=drive`. The Pi's service account stays read-only.
