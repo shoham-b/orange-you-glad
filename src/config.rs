@@ -17,6 +17,10 @@ pub struct Config {
     /// Gap between pictures, in pixels.
     #[serde(default = "default_gap_px")]
     pub gap_px: u32,
+    /// Chance, from 0 to 1, that a cycle shows a moment (an ordered story from
+    /// `Config/moments.json`) instead of a subject collage.
+    #[serde(default = "default_moment_chance")]
+    pub moment_chance: f64,
     /// Cross-fade duration between collages; 0 switches instantly.
     #[serde(default = "default_fade_ms")]
     pub fade_ms: u64,
@@ -35,6 +39,9 @@ fn default_tiles() -> usize {
 }
 fn default_gap_px() -> u32 {
     0
+}
+fn default_moment_chance() -> f64 {
+    0.25
 }
 fn default_fade_ms() -> u64 {
     1500
@@ -55,6 +62,7 @@ struct Overrides {
     tiles: Option<usize>,
     gap_px: Option<u32>,
     fade_ms: Option<u64>,
+    moment_chance: Option<f64>,
     background: Option<[u8; 3]>,
 }
 
@@ -82,6 +90,7 @@ impl Config {
             tiles: o.tiles.unwrap_or(self.tiles),
             gap_px: o.gap_px.unwrap_or(self.gap_px),
             fade_ms: o.fade_ms.unwrap_or(self.fade_ms),
+            moment_chance: o.moment_chance.unwrap_or(self.moment_chance),
             background: o.background.unwrap_or(self.background),
             ..self.clone()
         };
@@ -101,6 +110,9 @@ impl Config {
     fn validate(&self) -> Result<()> {
         if self.interval_secs == 0 {
             bail!("interval_secs must be at least 1");
+        }
+        if !(0.0..=1.0).contains(&self.moment_chance) {
+            bail!("moment_chance must be between 0 and 1");
         }
         if self.tiles == 0 {
             bail!("tiles must be at least 1");

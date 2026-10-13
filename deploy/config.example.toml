@@ -17,6 +17,7 @@
 
 # Duration of the cross-fade between collages, in milliseconds.
 # fade_ms = 1500
+# moment_chance = 0.25
 
 # Background colour shown in the gaps, as [red, green, blue], each 0-255.
 # background = [0, 0, 0]

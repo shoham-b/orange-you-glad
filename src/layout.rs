@@ -80,6 +80,14 @@ pub fn best_fit<R: Rng + ?Sized>(
     best.unwrap_or(Fit { tiles: Vec::new(), order: Vec::new(), mismatch: 0.0 })
 }
 
+/// Tile indices in reading order (top to bottom, then left to right), so a story told in
+/// sequence reads the way the eye travels.
+pub fn reading_order(tiles: &[Rect]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..tiles.len()).collect();
+    order.sort_by_key(|&i| (tiles[i].y, tiles[i].x));
+    order
+}
+
 fn log_aspect(ratio: f64) -> f64 {
     ratio.max(1e-3).ln()
 }
@@ -135,6 +143,13 @@ mod tests {
     use super::*;
     use rand::SeedableRng;
     use rand::rngs::StdRng;
+
+    #[test]
+    fn reading_order_goes_top_to_bottom_then_left_to_right() {
+        let r = |x, y| Rect { x, y, w: 10, h: 10 };
+        let tiles = [r(10, 10), r(0, 10), r(10, 0), r(0, 0)];
+        assert_eq!(reading_order(&tiles), vec![3, 2, 1, 0]);
+    }
 
     fn overlaps(a: &Rect, b: &Rect) -> bool {
         a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
