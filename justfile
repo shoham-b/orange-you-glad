@@ -59,3 +59,7 @@ integration: sync
 # Generate the shape pictures into scratch/drive-upload to copy into the Drive development folder (Processed/*, and merge Config/subjects.json into the existing one).
 sample-for-drive:
     cargo run --example sample_library -- scratch/drive-upload
+
+# One-time: create the write-scoped rclone remote `gdrive-rw` (Editor service account) used by scripts/intake.ps1.
+drive-auth-writer:
+    rclone config create gdrive-rw drive service_account_file=$env:GDRIVE_WRITER_SERVICE_ACCOUNT_FILE scope=drive
