@@ -32,6 +32,7 @@ well-known maintained crates.
 | `library` | Resolve subjects (uuid lists) to image files, pick a subject |
 | `hebrew` | Pure Gregorian to Hebrew date conversion |
 | `family` | `Config/family.json`: Hebrew birthdays; which people celebrate today |
+| `moment` | `Config/moments.json`: ordered stories (ball passed along, a joke and the laughs) shown in story order |
 | `collage` | Decode one photo at a time, cover-crop and scale it into its tile |
 | `display` | `Display` trait plus framebuffer and image-file implementations |
 | `fade` | Cross-fade between two frames, written through a `Display` |
@@ -126,3 +127,10 @@ Edit or delete these freely as the code changes.
 - Skip unreadable or corrupt images with a `tracing::warn!`; one bad file must not stop the show.
 - Clippy pedantic is enabled with a short allow-list in `Cargo.toml`. Fix warnings rather than
   adding `#[allow]`; if an allow is justified, add a one-line reason.
+
+## Moments (intake agents)
+
+To get a punchy "story" collage, add an entry to `Config/moments.json` in the Drive folder:
+`{"Passing the ball": ["uuid1", "uuid2", "uuid3"]}`. List uuids in story order (setup first,
+payoff last), 2 to about 6 pictures that are consecutive beats of one event. Tune how often they
+appear with `moment_chance` in `Config/settings.toml`.

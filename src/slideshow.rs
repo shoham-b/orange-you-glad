@@ -1,4 +1,4 @@
-//! One slideshow cycle: pick a subject, build a collage, fade it in.
+//! One slideshow cycle: pick a subject or moment, build a collage, fade it in.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -7,13 +7,13 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use chrono::{Local, NaiveDate};
 use image::RgbImage;
-use rand::Rng;
 use rand::rngs::ThreadRng;
+use rand::{Rng, RngExt};
 use tracing::{info, warn};
 
 use crate::config::Config;
 use crate::display::Display;
-use crate::{collage, fade, family, hebrew, layout, library};
+use crate::{collage, fade, family, hebrew, layout, library, moment};
 
 /// What the show remembers between cycles.
 pub struct Slideshow<R: Rng = ThreadRng> {
@@ -75,21 +75,32 @@ impl<R: Rng> Slideshow<R> {
             .filter(|s| birthdays.iter().any(|b| b.eq_ignore_ascii_case(&s.name)))
             .cloned()
             .collect();
-        if !celebrated.is_empty() {
+        let celebrated_today = !celebrated.is_empty();
+        if celebrated_today {
             subjects = celebrated;
         }
-        let subject =
-            library::pick_subject(&subjects, self.previous_subject.as_deref(), &mut self.rng)
-                .with_context(|| {
-                    format!("no pictures found under {}", config.library_root.display())
-                })?;
-        info!("showing '{}' ({} pictures)", subject.name, subject.images.len());
+        let moments = if celebrated_today { Vec::new() } else { load_moments(config) };
+        let story = !moments.is_empty() && self.rng.random_bool(config.moment_chance);
+        let pool = if story { &moments } else { &subjects };
+        let subject = library::pick_subject(pool, self.previous_subject.as_deref(), &mut self.rng)
+            .with_context(|| {
+                format!("no pictures found under {}", config.library_root.display())
+            })?;
+        info!("showing '{}' ({} pictures, story: {story})", subject.name, subject.images.len());
 
         let (width, height) = display.size();
-        let count = config.tiles.min(subject.images.len());
+        let count =
+            if story { subject.images.len() } else { config.tiles.min(subject.images.len()) };
         let shapes = library::load_shapes(&config.library_root);
-        let (mut aspects, all) =
-            probe(library::shuffled_images(subject, &mut self.rng), count, &shapes);
+        let (mut aspects, all) = probe(
+            if story {
+                subject.images.clone()
+            } else {
+                library::shuffled_images(subject, &mut self.rng)
+            },
+            count,
+            &shapes,
+        );
         // If unreadable pictures leave tiles empty, lay out again with fewer tiles so no hole
         // shows. `filled < tiles.len() <= aspects.len()`, so `aspects` shrinks and the loop ends.
         let next = loop {
@@ -101,7 +112,11 @@ impl<R: Rng> Slideshow<R> {
                 FIT_ATTEMPTS,
                 &mut self.rng,
             );
-            let ordered = in_tile_order(&all, &fit.order);
+            let ordered = if story {
+                in_story_order(&all, &fit.tiles)
+            } else {
+                in_tile_order(&all, &fit.order)
+            };
             let (canvas, filled) =
                 collage::build(width, height, config.background, &fit.tiles, &ordered);
             if filled == fit.tiles.len() || filled == 0 {
@@ -152,6 +167,24 @@ fn probe(
 fn recorded(path: &Path, shapes: &HashMap<String, f64>) -> Option<f64> {
     let stem = path.file_stem()?.to_str()?;
     shapes.get(&stem.to_ascii_lowercase()).copied()
+}
+
+/// The moments to choose from; a broken moments file is logged and treated as having none.
+fn load_moments(config: &Config) -> Vec<library::Subject> {
+    moment::scan(&config.library_root).unwrap_or_else(|err| {
+        warn!("ignoring moments: {err:#}");
+        Vec::new()
+    })
+}
+
+/// `all` in story order laid out for `tiles`: the first picture goes to the first tile in reading
+/// order, and so on, so the story reads top to bottom, left to right.
+fn in_story_order(all: &[PathBuf], tiles: &[layout::Rect]) -> Vec<PathBuf> {
+    let mut ordered = all.to_vec();
+    for (rank, tile) in layout::reading_order(tiles).into_iter().enumerate() {
+        ordered[tile].clone_from(&all[rank]);
+    }
+    ordered
 }
 
 /// `all` reordered so index `i` is the picture for tile `i`, followed by the pictures that got no
@@ -222,6 +255,27 @@ mod tests {
 
         assert_eq!(show.current_subject(), Some("red"));
         assert_eq!(display.frames.last().unwrap().get_pixel(0, 0), &Rgb([250, 0, 0]));
+    }
+
+    #[test]
+    fn a_moment_tells_its_pictures_in_reading_order() {
+        let dir = tempfile::tempdir().unwrap();
+        photo(dir.path(), "red", [250, 0, 0]);
+        photo(dir.path(), "blue", [0, 0, 250]);
+        list_subjects(dir.path(), r#"{"all": ["red", "blue"]}"#);
+        std::fs::write(dir.path().join("Config/moments.json"), r#"{"pass": ["blue", "red"]}"#)
+            .unwrap();
+        let mut cfg = config(dir.path());
+        cfg.moment_chance = 1.0;
+        let mut display = Recorder { size: (16, 16), frames: Vec::new() };
+        let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
+
+        show.show_next(&cfg, &mut display).unwrap();
+
+        assert_eq!(show.current_subject(), Some("pass"));
+        let frame = display.frames.last().unwrap();
+        assert_eq!(frame.get_pixel(0, 0), &Rgb([0, 0, 250]));
+        assert_eq!(frame.get_pixel(15, 15), &Rgb([250, 0, 0]));
     }
 
     #[test]

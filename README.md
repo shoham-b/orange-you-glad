@@ -8,6 +8,7 @@ folder, and draws straight to the Linux framebuffer. No X server, no desktop.
 
 - Subjects: `Config/subjects.json` maps each subject name to the uuids of its pictures (files in
   `Processed/`); one subject is picked per collage.
+- Moments: `Config/moments.json` maps a name to uuids in story order (a ball passed from person to person, a joke then the laughs). With chance `moment_chance` a cycle shows one as a collage whose pictures read top to bottom, left to right. Never on birthdays.
 - Birthdays: `Config/family.json` gives family members a Hebrew birthday; on that
   day the collages show only the subject named after them.
 - Collages with varied tile sizes, built by random binary splits of the screen. Several layouts are
@@ -47,6 +48,7 @@ See `deploy/config.example.toml`.
 | `tiles` | `6` | Photos per collage |
 | `gap_px` | `0` | Gap between tiles, in pixels |
 | `fade_ms` | `1500` | Cross-fade duration, in milliseconds |
+| `moment_chance` | `0.25` | Chance (0 to 1) a cycle shows a moment from `Config/moments.json` instead of a subject |
 | `background` | `[0, 0, 0]` | Gap colour as `[r, g, b]` |
 | `framebuffer` | `/dev/fb0` | Framebuffer device |
 

@@ -8,6 +8,7 @@ pub mod family;
 pub mod hebrew;
 pub mod layout;
 pub mod library;
+pub mod moment;
 pub mod pacing;
 
 pub mod slideshow;
