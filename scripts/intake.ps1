@@ -7,8 +7,9 @@
 param([Parameter(Mandatory)][ValidateSet('prepare', 'apply')][string]$Step)
 
 $ErrorActionPreference = 'Stop'
-$Folder = '1foxxmTR49YCuahiHT8zbkNTgLo2DIKOS' # production root, see justfile
-$Remote = "gdrive-rw,root_folder_id=${Folder}:"
+$Folder = if ($env:OYG_INTAKE_FOLDER) { $env:OYG_INTAKE_FOLDER } else { '1foxxmTR49YCuahiHT8zbkNTgLo2DIKOS' } # production root, see justfile
+$RemoteName = if ($env:OYG_INTAKE_REMOTE) { $env:OYG_INTAKE_REMOTE } else { 'gdrive-rw' }
+$Remote = "$RemoteName,root_folder_id=${Folder}:"
 $Work = Join-Path $PSScriptRoot '..\scratch\intake'
 $PreviewPx = 768
 # Caps model spend per night (about 1k tokens per picture); the rest wait in Incoming/ for later runs.
@@ -47,7 +48,7 @@ if ($Step -eq 'prepare') {
         try { New-Preview "$Work\orig\$id.$ext" "$Work\preview\$id.jpg" } catch { Write-Warning "unreadable $n"; continue }
         $manifest += [pscustomobject]@{ uuid = $id; name = $n; ext = $ext }
     }
-    $manifest | ConvertTo-Json -AsArray | Set-Content "$Work\manifest.json"
+    ConvertTo-Json -InputObject @($manifest) | Set-Content "$Work\manifest.json"
     Rc copyto "${Remote}Config/subjects.json" "$Work\subjects.json"
     $known = (Get-Content "$Work\subjects.json" -Raw | ConvertFrom-Json).PSObject.Properties.Name -join ', '
     "KNOWN SUBJECTS: $known"
