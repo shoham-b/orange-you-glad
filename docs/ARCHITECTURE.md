@@ -4,7 +4,9 @@
 
 ```mermaid
 flowchart LR
-    GD[Shared Google Drive folder] -- rclone sync --> LIB[(Library root on disk)]
+    GD[Shared Google Drive folder] -- rclone sync Config --> LIB[(Library root on disk)]
+    GD -- "rclone: chosen pictures only" --> SRC[source: list and fetch]
+    SRC --> L
     LIB --> L[library: pick subject and files]
     CFG[config] --> S
     L --> S[slideshow cycle driven by main]
@@ -16,10 +18,14 @@ flowchart LR
     D --> PNG["PNG file in dev mode"]
 ```
 
-Per slide: pick a subject, choose `tiles` images from it, take their shapes from `Config/shapes.json` (or the file header), try several random layouts
+Per slide: list the pictures, pick a subject, choose `tiles` images from it (plus two spares), fetch
+them through `PictureSource`, take their shapes from `Config/shapes.json` (or the file header), try several random layouts
 for the frame size and keep the one whose tiles best match those shapes,
 render the collage into the "next" frame, cross-fade from "previous" to "next" through the
 `Display`, then hold for `interval_secs`. "Next" becomes "previous" and the cycle repeats.
+
+With `remote` set, fetching downloads into a temporary folder that is deleted once the collage is
+built; if it fails, the screen is left as it is.
 
 ## Modules
 
@@ -31,6 +37,8 @@ render the collage into the "next" frame, cross-fade from "previous" to "next" t
 | `hebrew` | Pure Gregorian to Hebrew date conversion |
 | `family` | Read `Config/family.json`; who has a birthday today (their subjects are then shown) |
 | `moment` | Read `Config/moments.json`; ordered stories shown with pictures in reading order |
+| `source` | `PictureSource` trait: local `Processed/`, or download from a remote |
+| `rclone` | The remote source: runs `rclone lsf` and `rclone copy` with a deadline |
 | `collage` | Decode, scale and place photos into a frame |
 | `display` | `Display` trait; framebuffer and PNG implementations |
 | `fade` | Blend two frames into a scratch frame, push each step to a `Display` |
@@ -57,7 +65,8 @@ dominated by one decoded photo (36 MB as RGB at 12 MP) plus decoder and resize s
 the peak does not grow with the number of tiles. A single picture is refused above 256 MB of
 decode memory. That leaves most of the 1 GB for the OS and page cache; the systemd unit also
 sets `MemoryMax` as a safety net. These are desktop measurements; the board has not been
-profiled yet.
+profiled yet. With `remote` set they exclude rclone (which has exited before decoding starts) and
+downloads held in an in-memory `/tmp`.
 
 ## Why the framebuffer
 

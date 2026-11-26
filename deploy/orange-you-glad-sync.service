@@ -1,5 +1,5 @@
 [Unit]
-Description=Sync photos from Google Drive with rclone
+Description=Sync the slideshow settings from Google Drive with rclone
 Documentation=https://github.com/shoham-b/orange-you-glad
 Wants=network-online.target time-sync.target
 After=network-online.target time-sync.target
@@ -11,10 +11,10 @@ Group=orange-you-glad
 Environment=RCLONE_CONFIG=/var/lib/orange-you-glad/rclone.conf
 # The remote "gdrive" must already be configured (see docs/DEPLOY.md). Its root_folder_id
 # points at the shared folder, so the remote root holds Incoming/, Processed/, Errored/ and
-# Config/. Only Processed/ and Config/ are mirrored; the other two belong to the intake agent.
+# Config/. Only Config/ is mirrored: the slideshow downloads the pictures of each collage itself
+# (`remote` in /etc/orange-you-glad.toml), so the card never holds the library.
 ExecStart=/usr/bin/rclone sync gdrive: /var/lib/orange-you-glad/photos \
   --ignore-case \
-  --include "/Processed/*.{jpg,jpeg,png,webp}" \
   --include "/Config/*.{json,toml}" \
   --include "/orange-you-glad.toml" \
   --max-size 25M \

@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use tracing::warn;
 
-use crate::library::{self, PROCESSED_DIR, Subject};
+use crate::library::{self, PictureIndex, Subject};
 
 /// Moments file inside the library root, next to `subjects.json`.
 pub const MOMENTS_FILE: &str = "Config/moments.json";
@@ -21,14 +21,14 @@ const MIN_PICTURES: usize = 2;
 #[derive(Debug, Deserialize)]
 struct MomentsFile(BTreeMap<String, Vec<String>>);
 
-/// The moments whose pictures are synced, each as a [`Subject`] whose `images` keep the story
+/// The moments whose pictures are in `files` (uuid to picture), each as a [`Subject`] whose `images` keep the story
 /// order. Moments left with fewer than two pictures are dropped.
 ///
 /// A missing moments file means no moments.
 ///
 /// # Errors
-/// Fails when the file cannot be read or is invalid, or `Processed` cannot be listed.
-pub fn scan(root: &Path) -> Result<Vec<Subject>> {
+/// Fails when the file cannot be read or is invalid.
+pub fn scan(root: &Path, files: &PictureIndex) -> Result<Vec<Subject>> {
     let path = root.join(MOMENTS_FILE);
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
@@ -37,13 +37,9 @@ pub fn scan(root: &Path) -> Result<Vec<Subject>> {
     };
     let MomentsFile(listed) =
         serde_json::from_str(&text).with_context(|| format!("invalid {}", path.display()))?;
-    if listed.is_empty() {
-        return Ok(Vec::new());
-    }
-    let files = library::index_processed(&root.join(PROCESSED_DIR))?;
     Ok(listed
         .into_iter()
-        .filter_map(|(name, uuids)| library::resolve(name, &uuids, &files))
+        .filter_map(|(name, uuids)| library::resolve(name, &uuids, files))
         .filter(|moment| {
             let enough = moment.images.len() >= MIN_PICTURES;
             if !enough {
@@ -71,10 +67,14 @@ mod tests {
         dir
     }
 
+    fn scanned(root: &Path) -> Result<Vec<Subject>> {
+        scan(root, &library::index_processed(&root.join("Processed"))?)
+    }
+
     #[test]
     fn keeps_story_order() {
         let dir = library_with(Some(r#"{"Pass": ["c", "a", "b"]}"#), &["a", "b", "c"]);
-        let moments = scan(dir.path()).unwrap();
+        let moments = scanned(dir.path()).unwrap();
         let names: Vec<_> = moments[0]
             .images
             .iter()
@@ -86,18 +86,18 @@ mod tests {
     #[test]
     fn missing_file_means_no_moments() {
         let dir = library_with(None, &["a"]);
-        assert_eq!(scan(dir.path()).unwrap(), vec![]);
+        assert_eq!(scanned(dir.path()).unwrap(), vec![]);
     }
 
     #[test]
     fn drops_moments_that_are_too_short_or_unsynced() {
         let dir = library_with(Some(r#"{"One": ["a"], "Gone": ["x", "y"]}"#), &["a"]);
-        assert_eq!(scan(dir.path()).unwrap(), vec![]);
+        assert_eq!(scanned(dir.path()).unwrap(), vec![]);
     }
 
     #[test]
     fn invalid_file_is_an_error() {
         let dir = library_with(Some("not json"), &[]);
-        assert!(scan(dir.path()).is_err());
+        assert!(scanned(dir.path()).is_err());
     }
 }

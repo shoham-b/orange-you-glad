@@ -14,9 +14,11 @@ new command), update this file or `docs/` in the same PR, immediately.
 ## Purpose and constraints
 
 Orange You Glad is a photo-collage slideshow for a TV. It runs on an Orange Pi Zero 2W
-(Allwinner H618, 4 cores, 1 GB RAM, Debian/Armbian aarch64) with HDMI output. It reads a library
-root synced from a shared Google Drive folder with rclone: `Processed/<uuid>.<ext>` pictures and
-`Config/subjects.json`, which maps each "subject" to a list of uuids. It picks a subject, builds a collage with varied tile sizes (random binary
+(Allwinner H618, 4 cores, 1 GB RAM, Debian/Armbian aarch64) with HDMI output. It reads a shared
+Google Drive folder through rclone: `Config/` is synced to a library root, and the
+`Processed/<uuid>.<ext>` pictures of each collage are downloaded on demand (config `remote`; without
+it they are read from the library root). `Config/subjects.json` maps each "subject" to a list of
+uuids. It picks a subject, builds a collage with varied tile sizes (random binary
 splits), cross-fades from the previous collage, and writes frames straight to `/dev/fb0`. There is no X
 server. Target resolution is 1080p.
 
@@ -33,6 +35,8 @@ well-known maintained crates.
 | `hebrew` | Pure Gregorian to Hebrew date conversion |
 | `family` | `Config/family.json`: Hebrew birthdays; which people celebrate today |
 | `moment` | `Config/moments.json`: ordered stories (ball passed along, a joke and the laughs) shown in story order |
+| `source` | `PictureSource` trait: local `Processed/`, or fetch from a remote |
+| `rclone` | Remote source: list, download only the chosen pictures, with a deadline |
 | `collage` | Decode one photo at a time, cover-crop and scale it into its tile |
 | `display` | `Display` trait plus framebuffer and image-file implementations |
 | `fade` | Cross-fade between two frames, written through a `Display` |
@@ -80,6 +84,8 @@ scripts; use a short target dir, for example `CARGO_TARGET_DIR=/c/t/oyg` (bash) 
 - Tests must be deterministic: seeded RNG (for example `StdRng::seed_from_u64`), `tempfile` for
   files, and no sleeping on real time beyond a few milliseconds.
 - Test I/O logic through trait seams (a fake `Display`), not by touching `/dev/fb0`.
+- After changing `rclone.rs`, run `cargo test --lib -- --ignored real_rclone` (needs rclone, no
+  network). It catches flag conflicts that fakes cannot.
 
 ## Style decisions
 

@@ -1,8 +1,8 @@
 # Orange You Glad
 
 A photo-collage slideshow for a TV. It runs on a small ARM board (built for the Orange Pi Zero 2W
-with 1 GB of RAM), reads photos from a folder that rclone keeps in sync with a shared Google Drive
-folder, and draws straight to the Linux framebuffer. No X server, no desktop.
+with 1 GB of RAM), shows photos from a shared Google Drive folder (downloading only those of the
+next collage, through rclone), and draws straight to the Linux framebuffer. No X server, no desktop.
 
 ## Features
 
@@ -43,7 +43,8 @@ See `deploy/config.example.toml`.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `library_root` | none (required) | Directory holding `Config/subjects.json` and `Processed/` |
+| `library_root` | none (required) | Directory holding `Config/subjects.json`, and `Processed/` unless `remote` is set |
+| `remote` | unset | rclone folder holding `Processed/`; downloads only each collage's pictures. Unset reads them from `library_root` |
 | `interval_secs` | `300` | Seconds each collage stays on screen |
 | `tiles` | `6` | Photos per collage |
 | `gap_px` | `0` | Gap between tiles, in pixels |

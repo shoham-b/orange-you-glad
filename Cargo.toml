@@ -27,6 +27,7 @@ image = { version = "0.25.10", default-features = false, features = ["jpeg", "pn
 rand = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.149"
+tempfile = "3.27.0"
 thiserror = "2.0.21"
 toml = "1.1.6"
 tracing = "0.1.44"
@@ -39,7 +40,6 @@ window = ["dep:minifb"]
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 dhat = "0.3.3"
-tempfile = "3.27.0"
 
 [lints.rust]
 unsafe_code = "forbid"

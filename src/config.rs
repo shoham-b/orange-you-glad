@@ -9,6 +9,10 @@ use serde::Deserialize;
 pub struct Config {
     /// Directory whose immediate subfolders are the "subjects".
     pub library_root: PathBuf,
+    /// rclone folder holding `Processed/`, for example `gdrive:`. When set, only the pictures of
+    /// the next collage are downloaded; `Config/` is still read from `library_root`.
+    #[serde(default)]
+    pub remote: Option<String>,
     #[serde(default = "default_interval_secs")]
     pub interval_secs: u64,
     /// Number of pictures per collage.
@@ -54,7 +58,8 @@ fn default_framebuffer() -> PathBuf {
 pub const SETTINGS_FILE: &str = "Config/settings.toml";
 
 /// Settings that may be changed from the Drive settings file. Device-level keys (`library_root`,
-/// `framebuffer`) are excluded on purpose: a Drive edit must not be able to blank the screen.
+/// `remote`, `framebuffer`) are excluded on purpose: a Drive edit must not be able to blank the
+/// screen or redirect downloads.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Overrides {
@@ -108,6 +113,10 @@ impl Config {
     }
 
     fn validate(&self) -> Result<()> {
+        // A leading dash would be taken by rclone as a flag.
+        if self.remote.as_ref().is_some_and(|r| r.is_empty() || r.starts_with('-')) {
+            bail!("remote must be an rclone folder such as \"gdrive:\"");
+        }
         if self.interval_secs == 0 {
             bail!("interval_secs must be at least 1");
         }
@@ -171,11 +180,22 @@ mod tests {
     #[test]
     fn bad_drive_files_are_ignored() {
         let dir = tempfile::tempdir().unwrap();
-        for bad in ["tiles = 0", "tiles = ", "framebuffer = \"/dev/null\"", "typo = 1"] {
+        for bad in
+            ["tiles = 0", "tiles = ", "framebuffer = \"/dev/null\"", "remote = \"x:\"", "typo = 1"]
+        {
             write_settings(dir.path(), bad);
             assert_eq!(applied(&base(dir.path())).tiles, 4, "{bad}");
             assert!(base(dir.path()).drive_overrides().is_err(), "{bad}");
             assert_eq!(applied(&base(dir.path())).framebuffer, PathBuf::from("/dev/fb0"));
+        }
+    }
+
+    #[test]
+    fn empty_or_flag_like_remote_is_invalid() {
+        for bad in ["", "--config=/x"] {
+            let c: Config =
+                toml::from_str(&format!("library_root = \"/x\"\nremote = {bad:?}")).unwrap();
+            assert!(c.validate().is_err(), "{bad}");
         }
     }
 
