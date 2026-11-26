@@ -5,8 +5,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result, ensure};
-use chrono::{Local, NaiveDate};
 use image::RgbImage;
+use jiff::ZonedDateTime;
+use jiff::civil::Date;
 use rand::rngs::ThreadRng;
 use rand::{Rng, RngExt};
 use tracing::{info, warn};
@@ -54,14 +55,14 @@ impl<R: Rng> Slideshow<R> {
     /// Fails when the library cannot be read or is empty, or when the display rejects a frame.
     /// The show is left unchanged, so the caller can simply retry later.
     pub fn show_next(&mut self, config: &Config, display: &mut dyn Display) -> Result<()> {
-        self.show_on(Local::now().date_naive(), config, display)
+        self.show_on(ZonedDateTime::now().date(), config, display)
     }
 
     /// Like [`Self::show_next`] for a given local date. On a family member's Hebrew birthday
     /// only the subjects named after the birthday people are shown.
     pub fn show_on(
         &mut self,
-        today: NaiveDate,
+        today: Date,
         config: &Config,
         display: &mut dyn Display,
     ) -> Result<()> {
@@ -72,7 +73,7 @@ impl<R: Rng> Slideshow<R> {
     pub fn show_from(
         &mut self,
         source: &dyn PictureSource,
-        today: NaiveDate,
+        today: Date,
         config: &Config,
         display: &mut dyn Display,
     ) -> Result<()> {
@@ -400,7 +401,7 @@ mod tests {
         };
         let mut display = Recorder { size: (16, 16), frames: Vec::new() };
         let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
-        let today = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let today = jiff::civil::date(2026, 1, 1);
         let config = config(dir.path());
 
         show.show_from(&source, today, &config, &mut display).unwrap();
@@ -447,13 +448,13 @@ mod tests {
         std::fs::write(dir.path().join("Config/family.json"), r#"{"dana": "27/1"}"#).unwrap();
         let mut display = Recorder { size: (16, 16), frames: Vec::new() };
         let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
-        let birthday = NaiveDate::from_ymd_opt(2026, 10, 8).unwrap(); // 27 Tishrei 5787
+        let birthday = jiff::civil::date(2026, 10, 8); // 27 Tishrei 5787
 
         for _ in 0..3 {
             show.show_on(birthday, &config(dir.path()), &mut display).unwrap();
             assert_eq!(show.current_subject(), Some("Dana"));
         }
-        show.show_on(birthday.succ_opt().unwrap(), &config(dir.path()), &mut display).unwrap();
+        show.show_on(birthday.tomorrow().unwrap(), &config(dir.path()), &mut display).unwrap();
         assert_eq!(show.current_subject(), Some("blue"));
     }
 

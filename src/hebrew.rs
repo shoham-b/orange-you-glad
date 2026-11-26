@@ -1,9 +1,9 @@
 //! Hebrew calendar arithmetic (Gregorian date to Hebrew date), pure and dependency-free.
 //!
-//! Follows the fixed-day algorithms of "Calendrical Calculations". Days are counted as
-//! `NaiveDate::num_days_from_ce`, where 1 January of year 1 is day 1.
+//! Follows the fixed-day algorithms of "Calendrical Calculations". Days are counted so that
+//! 1 January of year 1 is day 1.
 
-use chrono::{Datelike, NaiveDate};
+use jiff::civil::{Date, date};
 
 /// Day number of 1 Tishrei of Hebrew year 1.
 const EPOCH_DAY: i64 = -1_373_427;
@@ -79,8 +79,9 @@ fn month_start(year: i64, month: u8) -> i64 {
     day
 }
 
-pub fn from_gregorian(date: NaiveDate) -> HebrewDate {
-    let day = i64::from(date.num_days_from_ce());
+pub fn from_gregorian(gregorian: Date) -> HebrewDate {
+    // Civil dates have no time zone, so every day is exactly 24 hours.
+    let day = gregorian.duration_since(date(1, 1, 1)).as_hours() / 24 + 1;
     let mut year = (day - EPOCH_DAY) * 98_496 / 35_975_351;
     while new_year_day(year + 1) <= day {
         year += 1;
@@ -99,8 +100,8 @@ pub fn from_gregorian(date: NaiveDate) -> HebrewDate {
 mod tests {
     use super::*;
 
-    fn hebrew(y: i32, m: u32, d: u32) -> (i64, u8, u8) {
-        let h = from_gregorian(NaiveDate::from_ymd_opt(y, m, d).unwrap());
+    fn hebrew(y: i16, m: i8, d: i8) -> (i64, u8, u8) {
+        let h = from_gregorian(date(y, m, d));
         (h.year, h.month, h.day)
     }
 
@@ -129,13 +130,13 @@ mod tests {
 
     #[test]
     fn every_day_round_trips_through_consecutive_hebrew_dates() {
-        let mut date = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
-        let mut prev = from_gregorian(date);
+        let mut gregorian = date(2020, 1, 1);
+        let mut prev = from_gregorian(gregorian);
         for _ in 0..365 * 12 {
-            date = date.succ_opt().unwrap();
-            let next = from_gregorian(date);
+            gregorian = gregorian.tomorrow().unwrap();
+            let next = from_gregorian(gregorian);
             let rolled = next.day == 1 && prev.day == days_in_month(prev.year, prev.month);
-            assert!(next.day == prev.day + 1 && next.month == prev.month || rolled, "{date}");
+            assert!(next.day == prev.day + 1 && next.month == prev.month || rolled, "{gregorian}");
             prev = next;
         }
     }
