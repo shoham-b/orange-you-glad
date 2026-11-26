@@ -16,6 +16,9 @@ pub const PROCESSED_DIR: &str = "Processed";
 /// Maps each subject name to the uuids of its pictures, inside the library root.
 pub const SUBJECTS_FILE: &str = "Config/subjects.json";
 
+/// Lowercased uuid to picture, for every picture that exists.
+pub type PictureIndex = HashMap<String, PathBuf>;
+
 /// A named set of pictures about one theme.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Subject {
@@ -77,25 +80,26 @@ pub fn load_shapes(root: &Path) -> HashMap<String, f64> {
 /// Uuids with no file yet (the intake agent may update the list before the sync catches up) are
 /// skipped, and subjects left with no pictures are dropped.
 pub fn scan(root: &Path) -> Result<Vec<Subject>> {
+    scan_with(root, &index_processed(&root.join(PROCESSED_DIR))?)
+}
+
+/// Like [`scan`], with the pictures that exist given by `files` (uuid to picture), for sources
+/// that keep them somewhere other than `Processed`.
+pub fn scan_with(root: &Path, files: &PictureIndex) -> Result<Vec<Subject>> {
     let path = root.join(SUBJECTS_FILE);
     let text = std::fs::read_to_string(&path)
         .with_context(|| format!("cannot read subjects file {}", path.display()))?;
     let SubjectsFile(listed) =
         serde_json::from_str(&text).with_context(|| format!("invalid {}", path.display()))?;
-    let files = index_processed(&root.join(PROCESSED_DIR))?;
 
     let subjects =
-        listed.into_iter().filter_map(|(name, uuids)| resolve(name, &uuids, &files)).collect();
+        listed.into_iter().filter_map(|(name, uuids)| resolve(name, &uuids, files)).collect();
     Ok(subjects)
 }
 
 /// The subject `name` made of the pictures `uuids` that exist in `files` (see
 /// [`index_processed`]), or `None` when none do.
-pub(crate) fn resolve(
-    name: String,
-    uuids: &[String],
-    files: &HashMap<String, PathBuf>,
-) -> Option<Subject> {
+pub(crate) fn resolve(name: String, uuids: &[String], files: &PictureIndex) -> Option<Subject> {
     let mut images: Vec<PathBuf> = Vec::new();
     let mut missing = 0_usize;
     for uuid in uuids {
@@ -114,7 +118,7 @@ pub(crate) fn resolve(
 /// Lowercased file stem (the uuid) to path, for every picture directly inside `dir`.
 /// Looking uuids up here, rather than joining them onto a path, keeps a bad entry in the
 /// subjects file from pointing outside `Processed`.
-pub(crate) fn index_processed(dir: &Path) -> Result<HashMap<String, PathBuf>> {
+pub(crate) fn index_processed(dir: &Path) -> Result<PictureIndex> {
     let entries = std::fs::read_dir(dir)
         .with_context(|| format!("cannot read pictures folder {}", dir.display()))?;
     let mut files = HashMap::new();
@@ -130,7 +134,7 @@ pub(crate) fn index_processed(dir: &Path) -> Result<HashMap<String, PathBuf>> {
     Ok(files)
 }
 
-fn is_image(path: &Path) -> bool {
+pub(crate) fn is_image(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| IMAGE_EXTENSIONS.iter().any(|x| x.eq_ignore_ascii_case(e)))

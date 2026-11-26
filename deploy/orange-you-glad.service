@@ -1,7 +1,8 @@
 [Unit]
 Description=Orange You Glad photo-collage slideshow
 Documentation=https://github.com/shoham-b/orange-you-glad
-After=local-fs.target
+Wants=network-online.target time-sync.target
+After=local-fs.target network-online.target time-sync.target
 
 [Service]
 Type=simple
@@ -10,10 +11,14 @@ Group=orange-you-glad
 SupplementaryGroups=video
 ExecStart=/usr/local/bin/orange-you-glad --config /etc/orange-you-glad.toml
 Environment=RUST_LOG=info
+# The slideshow runs rclone to download the pictures of each collage.
+Environment=RCLONE_CONFIG=/var/lib/orange-you-glad/rclone.conf
+Environment=RCLONE_CACHE_DIR=/tmp/rclone-cache
 Restart=always
 RestartSec=5
 
-# Hardening. The service needs the framebuffer, read access to the photo library, and nothing else.
+# Hardening. The service needs the framebuffer, read access to the library and the Drive
+# credentials, and the network (for rclone).
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
@@ -27,14 +32,13 @@ RestrictSUIDSGID=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 CapabilityBoundingSet=
-RestrictAddressFamilies=AF_UNIX
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 SystemCallFilter=@system-service
 DevicePolicy=closed
 DeviceAllow=/dev/fb0 rw
 ReadOnlyPaths=/var/lib/orange-you-glad
-# Same user as the sync job, so hide the Drive credentials from the slideshow.
-InaccessiblePaths=-/var/lib/orange-you-glad/rclone.conf -/var/lib/orange-you-glad/service-account.json
-# Keep a runaway process from starving the 1 GB board.
+# Keep a runaway process from starving the 1 GB board. Covers rclone too, and the downloads if
+# /tmp is held in memory.
 MemoryMax=600M
 
 [Install]

@@ -4,15 +4,18 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::{Context, Result};
-use chrono::{Local, NaiveDate};
+use anyhow::{Context, Result, ensure};
 use image::RgbImage;
+use jiff::ZonedDateTime;
+use jiff::civil::Date;
 use rand::rngs::ThreadRng;
 use rand::{Rng, RngExt};
 use tracing::{info, warn};
 
 use crate::config::Config;
 use crate::display::Display;
+use crate::library::PictureIndex;
+use crate::source::{self, PictureSource};
 use crate::{collage, fade, family, hebrew, layout, library, moment};
 
 /// What the show remembers between cycles.
@@ -52,18 +55,30 @@ impl<R: Rng> Slideshow<R> {
     /// Fails when the library cannot be read or is empty, or when the display rejects a frame.
     /// The show is left unchanged, so the caller can simply retry later.
     pub fn show_next(&mut self, config: &Config, display: &mut dyn Display) -> Result<()> {
-        self.show_on(Local::now().date_naive(), config, display)
+        self.show_on(ZonedDateTime::now().date(), config, display)
     }
 
     /// Like [`Self::show_next`] for a given local date. On a family member's Hebrew birthday
     /// only the subjects named after the birthday people are shown.
     pub fn show_on(
         &mut self,
-        today: NaiveDate,
+        today: Date,
         config: &Config,
         display: &mut dyn Display,
     ) -> Result<()> {
-        let mut subjects = library::scan(&config.library_root)?;
+        self.show_from(source::from_config(config).as_ref(), today, config, display)
+    }
+
+    /// Like [`Self::show_on`], taking the pictures from `source`.
+    pub fn show_from(
+        &mut self,
+        source: &dyn PictureSource,
+        today: Date,
+        config: &Config,
+        display: &mut dyn Display,
+    ) -> Result<()> {
+        let files = source.index()?;
+        let mut subjects = library::scan_with(&config.library_root, &files)?;
         let birthdays =
             family::birthday_people(&config.library_root, hebrew::from_gregorian(today))
                 .unwrap_or_else(|err| {
@@ -79,7 +94,7 @@ impl<R: Rng> Slideshow<R> {
         if celebrated_today {
             subjects = celebrated;
         }
-        let moments = if celebrated_today { Vec::new() } else { load_moments(config) };
+        let moments = if celebrated_today { Vec::new() } else { load_moments(config, &files) };
         let story = !moments.is_empty() && self.rng.random_bool(config.moment_chance);
         let pool = if story { &moments } else { &subjects };
         let subject = library::pick_subject(pool, self.previous_subject.as_deref(), &mut self.rng)
@@ -91,16 +106,19 @@ impl<R: Rng> Slideshow<R> {
         let (width, height) = display.size();
         let count =
             if story { subject.images.len() } else { config.tiles.min(subject.images.len()) };
+        let mut pool = if story {
+            subject.images.clone()
+        } else {
+            library::shuffled_images(subject, &mut self.rng)
+        };
+        // Decided before fetching, so a remote source downloads only what this collage can use.
+        pool.truncate(count.saturating_add(SPARE_PICTURES));
+        // Held until the collage is built: dropping it deletes the downloaded files.
+        let fetched = source.fetch(&pool)?;
         let shapes = library::load_shapes(&config.library_root);
-        let (mut aspects, all) = probe(
-            if story {
-                subject.images.clone()
-            } else {
-                library::shuffled_images(subject, &mut self.rng)
-            },
-            count,
-            &shapes,
-        );
+        let (mut aspects, all) = probe(fetched.paths.clone(), count, &shapes);
+        // Without this, a collage with no usable picture would replace the screen with a blank one.
+        ensure!(!aspects.is_empty(), "no usable picture in '{}'", subject.name);
         // If unreadable pictures leave tiles empty, lay out again with fewer tiles so no hole
         // shows. `filled < tiles.len() <= aspects.len()`, so `aspects` shrinks and the loop ends.
         let next = loop {
@@ -119,7 +137,8 @@ impl<R: Rng> Slideshow<R> {
             };
             let (canvas, filled) =
                 collage::build(width, height, config.background, &fit.tiles, &ordered);
-            if filled == fit.tiles.len() || filled == 0 {
+            ensure!(filled > 0, "no picture in '{}' could be decoded", subject.name);
+            if filled == fit.tiles.len() {
                 break canvas;
             }
             aspects.truncate(filled);
@@ -132,6 +151,9 @@ impl<R: Rng> Slideshow<R> {
         Ok(())
     }
 }
+
+/// Extra pictures fetched beyond the tile count, to stand in for ones that fail to decode.
+const SPARE_PICTURES: usize = 2;
 
 /// Candidate layouts tried per collage; each is cheap geometry, so this costs microseconds.
 const FIT_ATTEMPTS: usize = 24;
@@ -170,8 +192,8 @@ fn recorded(path: &Path, shapes: &HashMap<String, f64>) -> Option<f64> {
 }
 
 /// The moments to choose from; a broken moments file is logged and treated as having none.
-fn load_moments(config: &Config) -> Vec<library::Subject> {
-    moment::scan(&config.library_root).unwrap_or_else(|err| {
+fn load_moments(config: &Config, files: &PictureIndex) -> Vec<library::Subject> {
+    moment::scan(&config.library_root, files).unwrap_or_else(|err| {
         warn!("ignoring moments: {err:#}");
         Vec::new()
     })
@@ -346,6 +368,64 @@ mod tests {
         assert!(frame.pixels().all(|p| p == &Rgb([250, 0, 0])), "background showed through");
     }
 
+    /// Stands in for a remote: records what was asked for and can go offline.
+    struct Download {
+        local: source::Local,
+        asked: std::cell::RefCell<Vec<usize>>,
+        offline: std::cell::Cell<bool>,
+    }
+
+    impl PictureSource for Download {
+        fn index(&self) -> Result<PictureIndex> {
+            self.local.index()
+        }
+        fn fetch(&self, pictures: &[PathBuf]) -> Result<source::Fetched> {
+            ensure!(!self.offline.get(), "offline");
+            self.asked.borrow_mut().push(pictures.len());
+            self.local.fetch(pictures)
+        }
+    }
+
+    #[test]
+    fn fetches_only_the_chosen_pictures_and_keeps_the_screen_when_offline() {
+        let dir = tempfile::tempdir().unwrap();
+        let names: Vec<String> = (0..9).map(|i| format!("p{i}")).collect();
+        for name in &names {
+            photo(dir.path(), name, [250, 0, 0]);
+        }
+        list_subjects(dir.path(), &format!(r#"{{"red": {names:?}}}"#));
+        let source = Download {
+            local: source::Local::new(dir.path()),
+            asked: Vec::new().into(),
+            offline: false.into(),
+        };
+        let mut display = Recorder { size: (16, 16), frames: Vec::new() };
+        let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
+        let today = jiff::civil::date(2026, 1, 1);
+        let config = config(dir.path());
+
+        show.show_from(&source, today, &config, &mut display).unwrap();
+        assert_eq!(*source.asked.borrow(), [config.tiles + SPARE_PICTURES]);
+
+        let presented = display.frames.len();
+        source.offline.set(true);
+        assert!(show.show_from(&source, today, &config, &mut display).is_err());
+        assert_eq!(display.frames.len(), presented);
+    }
+
+    #[test]
+    fn undecodable_pictures_never_blank_the_screen() {
+        let dir = tempfile::tempdir().unwrap();
+        photo(dir.path(), "red", [250, 0, 0]);
+        std::fs::write(dir.path().join("Processed/red.png"), b"not an image").unwrap();
+        list_subjects(dir.path(), r#"{"red": ["red"]}"#);
+        let mut display = Recorder { size: (16, 16), frames: Vec::new() };
+        let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
+
+        assert!(show.show_next(&config(dir.path()), &mut display).is_err());
+        assert_eq!(display.frames.len(), 0);
+    }
+
     #[test]
     fn empty_library_is_an_error_and_leaves_the_show_unchanged() {
         let dir = tempfile::tempdir().unwrap();
@@ -368,13 +448,13 @@ mod tests {
         std::fs::write(dir.path().join("Config/family.json"), r#"{"dana": "27/1"}"#).unwrap();
         let mut display = Recorder { size: (16, 16), frames: Vec::new() };
         let mut show = Slideshow::with_rng((16, 16), StdRng::seed_from_u64(1));
-        let birthday = NaiveDate::from_ymd_opt(2026, 10, 8).unwrap(); // 27 Tishrei 5787
+        let birthday = jiff::civil::date(2026, 10, 8); // 27 Tishrei 5787
 
         for _ in 0..3 {
             show.show_on(birthday, &config(dir.path()), &mut display).unwrap();
             assert_eq!(show.current_subject(), Some("Dana"));
         }
-        show.show_on(birthday.succ_opt().unwrap(), &config(dir.path()), &mut display).unwrap();
+        show.show_on(birthday.tomorrow().unwrap(), &config(dir.path()), &mut display).unwrap();
         assert_eq!(show.current_subject(), Some("blue"));
     }
 

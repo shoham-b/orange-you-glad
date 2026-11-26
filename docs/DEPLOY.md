@@ -62,8 +62,26 @@ Or build from source on a faster machine with
 
 ```sh
 sudo install -m 0644 deploy/config.example.toml /etc/orange-you-glad.toml
-sudoedit /etc/orange-you-glad.toml   # uncomment library_root and any other keys you want
+sudoedit /etc/orange-you-glad.toml   # uncomment library_root, remote and any other keys you want
 ```
+
+Set both `library_root = "/var/lib/orange-you-glad/photos"` and `remote = "gdrive:"`. The sync
+timer keeps `Config/` in `library_root`; for each collage the slideshow lists `Processed/` on the
+remote, downloads only the pictures it chose (plus two spares), builds the collage and deletes
+them. So the card never holds the library, and rclone must be installed.
+
+- New collages need the internet. While a download fails, the collage on screen stays and the
+  slideshow retries every 10 seconds. Nothing is shown after a reboot until the network is back.
+- The next collage appears after `interval_secs` plus the time to list and download.
+- Downloads go to the system temporary folder. If `/tmp` is held in memory, they use RAM, counted
+  against the unit's `MemoryMax`; set `Environment=TMPDIR=...` (with a matching `ReadWritePaths=`)
+  to put them on the card instead. rclone's memory use has not been measured on the board.
+- Use the service account (option A below). With option B, rclone tries to save refreshed tokens
+  to `rclone.conf`, which the slideshow unit mounts read-only.
+- Upgrading a board that mirrored the pictures: the sync no longer touches the old copy, so
+  delete it with `sudo rm -r /var/lib/orange-you-glad/photos/Processed`. Reinstall both units.
+- Without `remote`, the slideshow reads `library_root/Processed`; then add
+  `--include "/Processed/*.{jpg,jpeg,png,webp}"` back to the sync unit.
 
 ## 6. Set up rclone for a shared Google Drive folder (headless)
 
@@ -151,13 +169,13 @@ Test a dry run:
 ```sh
 sudo -u orange-you-glad env RCLONE_CONFIG=/var/lib/orange-you-glad/rclone.conf \
   rclone sync gdrive: /var/lib/orange-you-glad/photos --dry-run --max-delete 50 \
-  --ignore-case --include "/Processed/*.{jpg,jpeg,png,webp}" --include "/Config/*.{json,toml}" \
-  --max-size 25M
+  --ignore-case --include "/Config/*.{json,toml}" --max-size 25M
 ```
 
-The Drive folder holds `Incoming/`, `Processed/`, `Errored/` and `Config/`. The `--include` rules
-mirror only `Processed/` and `Config/`; `Incoming/` and `Errored/` belong to the intake agent and
-are never downloaded. Keep these rules in step with the sync service unit's command.
+The Drive folder holds `Incoming/`, `Processed/`, `Errored/` and `Config/`. The `--include` rule
+mirrors only `Config/`. Pictures in `Processed/` are downloaded by the slideshow as needed, skipping
+files over 25 MB; `Incoming/` and `Errored/` belong to the intake agent and are never downloaded.
+Keep this rule in step with the sync service unit's command.
 
 Note that `rclone sync` makes the destination match the source, deleting local files that are no
 longer in Drive. Never point it at a directory holding anything else. `--max-delete 50` aborts a
@@ -220,11 +238,12 @@ its tests are `#[ignore]`d so plain `cargo test` and CI do not need Drive.
 | Screen is blank or the console reappears | Another process owns the display; stop any `getty` or desktop on tty1; verify the kernel arguments from step 2 |
 | Screen blanks after a few minutes | `consoleblank=0` missing from `/proc/cmdline` |
 | Garbled or shifted image | Resolution or stride mismatch; recheck `virtual_size`, `stride`, `bits_per_pixel` |
+| No new collages, "rclone failed" in the journal | Network, clock and `remote`; test with `rclone lsf gdrive:Processed` as the service user with the same `RCLONE_CONFIG` |
 | No photos shown | `library_root` wrong, `Config/subjects.json` missing or invalid, or its uuids have no matching file in `Processed/` yet (unsynced uuids are logged as warnings); run with `RUST_LOG=debug` |
 | Sync fails with auth errors | Wrong system clock (`timedatectl`); expired token (an OAuth app in "Testing" status expires after 7 days: run `rclone config reconnect gdrive:` or switch to a service account); wrong scope |
 | Sync aborts with a max-delete error | Drive listed far fewer files than expected; check `root_folder_id` and that the folder is still shared, then raise `--max-delete` if the removal was intended |
 | Sync copies nothing | Wrong `root_folder_id`, or the folder is not shared with the authorizing account |
-| Out-of-memory kills | Check `journalctl -k`; reduce `tiles`; lower `--max-size`; confirm swap or zram |
+| Out-of-memory kills | Check `journalctl -k`; reduce `tiles`; move downloads off an in-memory `/tmp` (step 5); confirm swap or zram |
 | Blinking cursor visible | `vt.global_cursor_default=0` missing from the kernel arguments |
 
 ## Nightly intake from Drive

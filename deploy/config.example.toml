@@ -3,8 +3,13 @@
 # the values shown are the defaults.
 
 # Directory mirroring the Drive folder: Config/subjects.json (subject name -> list of uuids)
-# and Processed/<uuid>.<ext> (the pictures).
+# and, unless remote is set below, Processed/<uuid>.<ext> (the pictures).
 # library_root = "/var/lib/orange-you-glad/photos"
+
+# rclone folder holding Processed/. When set, only the pictures of the next collage are downloaded
+# (to a temporary folder, deleted once the collage is built), and library_root needs just Config/.
+# Leave unset to read the pictures from library_root/Processed. The deployed units expect it set.
+# remote = "gdrive:"
 
 # Seconds each collage stays on screen before the next one fades in.
 # interval_secs = 300
